@@ -1,0 +1,114 @@
+services:
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=cluster
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_namenode_rpc-address=namenode:9000
+    ports:
+      - "9870:9870"    # Web UI HDFS
+      - "9000:9000"    # HDFS default FS port
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+      - ./hadoop_conf:/hadoop/etc/hadoop
+    networks:
+      - data_network
+    restart: always
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    depends_on:
+      - namenode
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+      - ./hadoop_conf:/hadoop/etc/hadoop
+    networks:
+      - data_network
+    restart: always
+
+  nifi:
+    image: apache/nifi:1.15.3  # Versione stabile e più facile da configurare
+    container_name: nifi
+    ports:
+      - "8080:8080"
+      - "8443:8443"  # Aggiungi anche la porta HTTPS
+    depends_on:
+      - namenode
+      - datanode
+    environment:
+      - NIFI_WEB_HTTP_PORT=8080  # Forza HTTP
+      - NIFI_WEB_HTTP_HOST=0.0.0.0
+      - NIFI_WEB_HTTPS_PORT=8443
+      - NIFI_WEB_HTTPS_HOST=0.0.0.0
+      - NIFI_SENSITIVE_PROPS_KEY=my-sensitive-key-12345
+
+      - SINGLE_USER_CREDENTIALS_USERNAME=admin
+      - SINGLE_USER_CREDENTIALS_PASSWORD=adminadmin12345
+      - NIFI_SECURITY_USER_AUTHORIZER=single-user-authorizer
+      - NIFI_SECURITY_USER_LOGIN_IDENTITY_PROVIDER=single-user-provider
+    volumes:
+      - nifi_conf:/opt/nifi/nifi-current/conf
+      - nifi_state:/opt/nifi/nifi-current/state
+      - nifi_content_repository:/opt/nifi/nifi-current/content_repository
+      - nifi_database_repository:/opt/nifi/nifi-current/database_repository
+      - nifi_flowfile_repository:/opt/nifi/nifi-current/flowfile_repository
+      - nifi_provenance_repository:/opt/nifi/nifi-current/provenance_repository
+      - ./hadoop_conf:/opt/hadoop/etc/hadoop
+    networks:
+      - data_network
+    restart: always
+
+  spark-master:
+    image: bitnami/spark:3.4
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_DIRS=/tmp
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8081
+    ports:
+      - "7077:7077"    # Porta per Spark cluster
+      - "8081:8081"    # Web UI del master
+    volumes:
+      - ./hadoop_conf:/opt/bitnami/spark/conf/hadoop_conf
+    networks:
+      - data_network
+    restart: always
+
+  spark-worker:
+    image: bitnami/spark:3.4
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_WORKER_CORES=1
+    depends_on:
+      - spark-master
+    volumes:
+      - ./hadoop_conf:/opt/bitnami/spark/conf/hadoop_conf
+    networks:
+      - data_network
+    restart: always
+
+    
+networks:
+  data_network:
+    driver: bridge
+
+volumes:
+  namenode_data:
+  datanode_data:
+  nifi_conf:
+  nifi_state:
+  nifi_content_repository:
+  nifi_database_repository:
+  nifi_flowfile_repository:
+  nifi_provenance_repository:
