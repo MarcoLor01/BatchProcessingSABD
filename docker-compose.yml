@@ -64,41 +64,55 @@ services:
     restart: always
 
   spark-master:
-    image: bitnami/spark:3.4
-    container_name: spark-master
-    environment:
-      - SPARK_MODE=master
-      - SPARK_RPC_AUTHENTICATION_ENABLED=no
-      - SPARK_RPC_ENCRYPTION_ENABLED=no
-      - SPARK_LOCAL_DIRS=/tmp
-      - SPARK_MASTER_PORT=7077
-      - SPARK_MASTER_WEBUI_PORT=8081
-    ports:
-      - "7077:7077"    # Porta per Spark cluster
-      - "8081:8081"    # Web UI del master
+    container_name: da-spark-master
+    build: .
+    image: da-spark-image
+    entrypoint: [ './entrypoint.sh', 'master' ]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
     volumes:
-      - ./hadoop_conf:/opt/bitnami/spark/conf/hadoop_conf
+      - ./scripts:/opt/spark/scripts
+      - spark-logs:/opt/spark/spark-events
+      - ./hadoop_conf:/opt/hadoop/etc/hadoop
+    env_file:
+      - .env.spark
     networks:
       - data_network
-    restart: always
+    ports:
+      - '9090:8080'
+      - '7077:7077'
 
   spark-worker:
-    image: bitnami/spark:3.4
-    container_name: spark-worker
-    environment:
-      - SPARK_MODE=worker
-      - SPARK_MASTER_URL=spark://spark-master:7077
-      - SPARK_WORKER_MEMORY=1G
-      - SPARK_WORKER_CORES=1
+    container_name: da-spark-worker
+    image: da-spark-image
+    entrypoint: [ './entrypoint.sh', 'worker' ]
     depends_on:
       - spark-master
+    env_file:
+      - .env.spark
     volumes:
-      - ./hadoop_conf:/opt/bitnami/spark/conf/hadoop_conf
+      - ./scripts:/opt/spark/scripts
+      - spark-logs:/opt/spark/spark-events
+      - ./hadoop_conf:/opt/hadoop/etc/hadoop
     networks:
       - data_network
-    restart: always
 
-    
+  spark-history-server:
+    container_name: da-spark-history
+    image: da-spark-image
+    entrypoint: [ './entrypoint.sh', 'history' ]
+    depends_on:
+      - spark-master
+    env_file:
+      - .env.spark
+    volumes:
+      - spark-logs:/opt/spark/spark-events
+    ports:
+      - '18080:18080'
+
 networks:
   data_network:
     driver: bridge
@@ -112,3 +126,4 @@ volumes:
   nifi_database_repository:
   nifi_flowfile_repository:
   nifi_provenance_repository:
+  spark-logs:
