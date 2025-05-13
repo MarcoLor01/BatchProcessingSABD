@@ -1,8 +1,9 @@
-# query2.py
+# query3.py
 import time
 import logging
 from pyspark.sql import SparkSession, functions as F
 from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 
 # Configura il logger
 logging.basicConfig(
@@ -12,6 +13,13 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+schema = StructType([
+    StructField("Country", StringType(), True),
+    StructField("hour", IntegerType(), True),
+    StructField("carbon_intensity", DoubleType(), True),
+    StructField("cfe_percentage", DoubleType(), True),
+])
+
 # Facendo riferimento al dataset dei valori energetici dell’Italia e della Svezia, aggregare i dati di ciascun
 # paese sulle 24 ore della giornata, calcolando il valor medio di “Carbon intensity gCO2eq/kWh
 # (direct)” e “Carbon-free energy percentage (CFE%)”. Calcolare il minimo, 25-esimo, 50-esimo, 75-
@@ -20,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     spark = (SparkSession.builder
-             .appName("Q2 Energy Stats - Parquet")
+             .appName("Q3 Energy Stats - Parquet")
              .config("spark.sql.files.maxPartitionBytes", "128MB")
              .config("spark.sql.parquet.filterPushdown", "true")
              .config("spark.sql.parquet.enableVectorizedReader", "true")
@@ -33,6 +41,7 @@ def main():
     df = spark.read.parquet(HDFS_PARQUET_PATH)
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
+    df.show()
     df.explain(extended=True)
 
     # 2. Calcola la media oraria per ciascun Paese
@@ -50,7 +59,7 @@ def main():
         F.lit("carbon-intensity").alias("data"),
         F.col("percentiles")[0].alias("min"),
         F.col("percentiles")[1].alias("perc_25"),
-        F.col("percentiles")[2].alias("median"),
+        F.col("percentiles")[2].alias("perc_50"),
         F.col("percentiles")[3].alias("perc_75"),
         F.col("percentiles")[4].alias("max")
     )
@@ -64,7 +73,7 @@ def main():
         F.lit("cfe").alias("data"),
         F.col("percentiles")[0].alias("min"),
         F.col("percentiles")[1].alias("perc_25"),
-        F.col("percentiles")[2].alias("median"),
+        F.col("percentiles")[2].alias("perc_50"),
         F.col("percentiles")[3].alias("perc_75"),
         F.col("percentiles")[4].alias("max")
     )
@@ -74,6 +83,7 @@ def main():
 
     # 5. Visualizza risultato
     final_result.orderBy("Country", "data").show(truncate=False)
+
 
 
 if __name__ == "__main__":

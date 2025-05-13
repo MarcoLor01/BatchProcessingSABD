@@ -3,6 +3,7 @@ import time
 import logging
 from pyspark.sql import SparkSession, functions as F
 from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 
 # Configura il logger
 logging.basicConfig(
@@ -10,6 +11,13 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+schema = StructType([
+    StructField("Country", StringType(), True),
+    StructField("year", IntegerType(), True),
+    StructField("carbon_intensity", DoubleType(), True),
+    StructField("cfe_percentage", DoubleType(), True),
+])
 
 
 def main():
@@ -24,10 +32,10 @@ def main():
 
     # 1) Lettura dati Parquet
     start_read = time.time()
-    df = spark.read.parquet(HDFS_PARQUET_PATH)
+    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH)
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
-
+    df.show()
     # 2) Aggregazione annuale
     start_query = time.time()
     result = (df
@@ -60,6 +68,7 @@ def main():
     logger.info(f"Tempo scrittura risultati: {write_time:.10f}s")
 
     total = read_time + query_time + write_time
+    logger.info(f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {query_time}\nTempo di write: {write_time}")
     logger.info(f"Tempo totale (read+query+write): {total:.10f}s")
 
     spark.stop()

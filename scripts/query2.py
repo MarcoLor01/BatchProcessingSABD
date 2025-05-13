@@ -3,6 +3,7 @@ import time
 import logging
 from pyspark.sql import SparkSession, functions as F
 from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 
 # Configura il logger
 logging.basicConfig(
@@ -13,13 +14,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+schema = StructType([
+    StructField("year", IntegerType(), True),
+    StructField("month", IntegerType(), True),
+    StructField("carbon_intensity", DoubleType(), True),
+    StructField("cfe_percentage", DoubleType(), True),
+])
+
 # Query 2: Considerando il solo dataset italiano, aggregare i dati sulla coppia (anno, mese), calcolando il valor
 # medio di “Carbon intensity gCO2eq/kWh (direct)” e “Carbon-free energy percentage (CFE%)”. Calcolare
 # la classifica delle prime 5 coppie (anno, mese) ordinando per“Carbon intensity gCO2eq/kWh
 # (direct)” decrescente, crescente e “Carbon-free energy percentage (CFE%)” decrescente, crescente.
 # In totale sono attesi 20 valori.
 
-# TODO: Possibile ottimizzazione: nuova colonna, usare schema
 def main():
     spark = (SparkSession.builder
              .appName("Q2 Energy Stats - Parquet")
@@ -32,7 +39,7 @@ def main():
 
     # 1) Lettura dati Parquet
     start_read = time.time()
-    df = spark.read.parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'Italy')
+    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'Italy')
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
     df.explain(extended=True)
