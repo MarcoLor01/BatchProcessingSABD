@@ -112,10 +112,17 @@ wait_for_hdfs_data
 #  exit 1
 #fi
 
-echo "5. Esecuzione dello script Spark..."
-docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py
+#echo "5. Esecuzione dello script Spark..."
+#docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py
+#if [ $? -ne 0 ]; then
+#  echo "Errore durante l'esecuzione della prima Query."
+#  exit 1
+#fi
+
+echo "5. Esecuzione dello script Spark 2..."
+docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2.py
 if [ $? -ne 0 ]; then
-  echo "Errore durante l'esecuzione della prima Query."
+  echo "Errore durante l'esecuzione della seconda Query."
   exit 1
 fi
 

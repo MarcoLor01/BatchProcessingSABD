@@ -1,4 +1,4 @@
-# query1_annual_stats.py
+# query1.py
 import time
 import logging
 from pyspark.sql import SparkSession, functions as F
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     spark = (SparkSession.builder
-             .appName("Q1 Annual Energy Stats - Parquet")
+             .appName("Q1 Energy Stats - Parquet")
              .config("spark.sql.files.maxPartitionBytes", "128MB")
              .config("spark.sql.parquet.filterPushdown", "true")
              .config("spark.sql.parquet.enableVectorizedReader", "true")
@@ -24,7 +24,7 @@ def main():
 
     # 1) Lettura dati Parquet
     start_read = time.time()
-    df = spark.read.option("basePath", HDFS_PARQUET_PATH).parquet(HDFS_PARQUET_PATH)
+    df = spark.read.parquet(HDFS_PARQUET_PATH)
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
 
