@@ -41,21 +41,39 @@ def main():
         F.avg("cfe_percentage").alias("avg_hour_cfe_percentage")
     )
 
-    # 3. Calcola i percentili sulle 24 medie orarie per ogni Paese
+    # 2. Percentili per "carbon_intensity"
     carbon_intensity_stats = intermediate_result.groupBy("Country").agg(
-        F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.0, 0.25, 0.5, 0.75, 1.0), 10000)")
-        .alias("percentiles_ci")
-    ).withColumn("data", F.lit("carbon-intensity"))
+        F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.0, 0.25, 0.5, 0.75, 1.0), 10000)").alias(
+            "percentiles")
+    ).select(
+        F.col("Country"),
+        F.lit("carbon-intensity").alias("data"),
+        F.col("percentiles")[0].alias("min"),
+        F.col("percentiles")[1].alias("perc_25"),
+        F.col("percentiles")[2].alias("median"),
+        F.col("percentiles")[3].alias("perc_75"),
+        F.col("percentiles")[4].alias("max")
+    )
 
+    # 3. Percentili per "cfe_percentage"
     cfe_stats = intermediate_result.groupBy("Country").agg(
-        F.expr("percentile_approx(avg_hour_cfe_percentage, array(0.0, 0.25, 0.5, 0.75, 1.0), 10000)")
-        .alias("percentiles_cfe")
-    ).withColumn("data", F.lit("cfe"))
+        F.expr("percentile_approx(avg_hour_cfe_percentage, array(0.0, 0.25, 0.5, 0.75, 1.0), 10000)").alias(
+            "percentiles")
+    ).select(
+        F.col("Country"),
+        F.lit("cfe").alias("data"),
+        F.col("percentiles")[0].alias("min"),
+        F.col("percentiles")[1].alias("perc_25"),
+        F.col("percentiles")[2].alias("median"),
+        F.col("percentiles")[3].alias("perc_75"),
+        F.col("percentiles")[4].alias("max")
+    )
 
-    # 4. Unisci i risultati
+    # 4. Unione dei risultati finali
     final_result = carbon_intensity_stats.unionByName(cfe_stats)
 
-    final_result.show()
+    # 5. Visualizza risultato
+    final_result.orderBy("Country", "data").show(truncate=False)
 
 
 if __name__ == "__main__":
