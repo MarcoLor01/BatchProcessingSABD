@@ -1,8 +1,6 @@
-# query1.py
 import time
 import logging
-from pyspark.sql import functions as F
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1, QUERY_1
+from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1, QUERY_1_SQL
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from scripts.commonFunction import save_execution_time, create_spark_session
 
@@ -11,6 +9,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 schema = StructType([
@@ -22,27 +21,38 @@ schema = StructType([
 
 
 def main():
-    spark = create_spark_session("Q1 Energy Stats")
+    spark = create_spark_session("Q1 Energy Stats SQL")
 
     # 1) Lettura dati Parquet
     start_read = time.time()
     df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH)
+    df.createOrReplaceTempView("energy_data") #Per fare query SQL
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
     df.show()
-    # 2) Aggregazione annuale
-    start_query = time.time()
-    result = (df
-              .groupBy("Country", "year")  # Wide
-              .agg(
-        F.avg("carbon_intensity").alias("avg_carbon_intensity"),
-        F.min("carbon_intensity").alias("min_carbon_intensity"),
-        F.max("carbon_intensity").alias("max_carbon_intensity"),
-        F.avg("cfe_percentage").alias("avg_cfe_percentage"),
-        F.min("cfe_percentage").alias("min_cfe_percentage"),
-        F.max("cfe_percentage").alias("max_cfe_percentage")
-    ).orderBy("Country", "year"))  # Wide, necessario per riordinamento
 
+    # 2) Aggregazione annuale con SQL
+    start_query = time.time()
+
+    sql_query = """
+    SELECT 
+        Country,
+        year,
+        AVG(carbon_intensity) AS avg_carbon_intensity,
+        MIN(carbon_intensity) AS min_carbon_intensity,
+        MAX(carbon_intensity) AS max_carbon_intensity,
+        AVG(cfe_percentage) AS avg_cfe_percentage,
+        MIN(cfe_percentage) AS min_cfe_percentage,
+        MAX(cfe_percentage) AS max_cfe_percentage
+    FROM 
+        energy_data
+    GROUP BY 
+        Country, year
+    ORDER BY 
+        Country, year
+    """
+
+    result = spark.sql(sql_query)
     query_time = time.time() - start_query
     logger.info(f"Tempo esecuzione query: {query_time:.10f}s")
 
@@ -65,8 +75,7 @@ def main():
     logger.info(f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {query_time}\nTempo di write: {write_time}")
     logger.info(f"Tempo totale (read+query+write): {total:.10f}s")
 
-    save_execution_time(QUERY_1, read_time, query_time, write_time, total)
-
+    save_execution_time(QUERY_1_SQL, read_time, query_time, write_time, total)
     spark.stop()
 
 

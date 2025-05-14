@@ -2,7 +2,8 @@ import time
 import logging
 from pyspark.sql import SparkSession, functions as F
 from pyspark.sql.types import TimestampType, DoubleType
-from config import HDFS_BASE_PATH, HDFS_PARQUET_PATH, COUNTRIES, YEARS
+from config import HDFS_BASE_PATH, HDFS_PARQUET_PATH, COUNTRIES, YEARS, HDFS_CSV_TOTAL_PATH
+import os
 
 # Configura il logger
 logging.basicConfig(
@@ -36,16 +37,18 @@ def main():
         F.col("Carbon-free energy percentage (CFE%)").cast(DoubleType()).alias("cfe_percentage")
     ))
 
+    print(df.count())
+
     output_path = HDFS_PARQUET_PATH
 
+    # TODO: Considerare non partizionare per year
     df.write \
         .mode("overwrite") \
-        .partitionBy("Country", "year") \
+        .partitionBy("Country") \
         .parquet(output_path)
 
     elapsed = time.time() - start_time
-    logger.info(f"ETL completato in {elapsed:.2f}s, output su {output_path}")
-
+    logger.info(f"Completato in {elapsed:.2f}s, output su {output_path}")
     spark.stop()
 
 

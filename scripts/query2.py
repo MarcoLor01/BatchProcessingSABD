@@ -1,9 +1,10 @@
 # query2.py
 import time
 import logging
-from pyspark.sql import SparkSession, functions as F
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2
+from pyspark.sql import functions as F
+from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2, QUERY_2
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+from commonFunction import create_spark_session, save_execution_time
 
 # Configura il logger
 logging.basicConfig(
@@ -13,13 +14,13 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 schema = StructType([
     StructField("year", IntegerType(), True),
     StructField("month", IntegerType(), True),
     StructField("carbon_intensity", DoubleType(), True),
     StructField("cfe_percentage", DoubleType(), True),
 ])
+
 
 # Query 2: Considerando il solo dataset italiano, aggregare i dati sulla coppia (anno, mese), calcolando il valor
 # medio di “Carbon intensity gCO2eq/kWh (direct)” e “Carbon-free energy percentage (CFE%)”. Calcolare
@@ -28,14 +29,7 @@ schema = StructType([
 # In totale sono attesi 20 valori.
 
 def main():
-    spark = (SparkSession.builder
-             .appName("Q2 Energy Stats - Parquet")
-             .config("spark.sql.files.maxPartitionBytes", "128MB")
-             .config("spark.sql.parquet.filterPushdown", "true")
-             .config("spark.sql.parquet.enableVectorizedReader", "true")
-             .config("spark.sql.adaptive.enabled", "true")
-             .getOrCreate())
-    spark.sparkContext.setLogLevel("WARN")
+    spark = create_spark_session("Q2 Energy Stats")
 
     # 1) Lettura dati Parquet
     start_read = time.time()
@@ -62,10 +56,10 @@ def main():
     cfe_percentage_desc.show()
     cfe_percentage_asc.show()
 
+    start_write = time.time()
     all_results = result_carbon_desc.union(result_carbon_asc).union(cfe_percentage_desc).union(cfe_percentage_asc)
 
     # 3) Scrittura risultati
-    start_write = time.time()
     (all_results
      .coalesce(1)
      .write
@@ -73,8 +67,13 @@ def main():
      .option("header", True)
      .csv(HDFS_BASE_RESULT_PATH_Q2))
     write_time = time.time() - start_write
+    total_time = read_time + query_time + write_time
     logger.info(f"Tempo scrittura risultati: {write_time:.10f}s")
-    all_results.show()
+    logger.info(f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {query_time}\nTempo di write: {write_time}")
+    logger.info(f"Tempo totale (read+query+write): {total_time:.10f}s")
+
+    save_execution_time(QUERY_2, read_time, query_time, write_time, total_time)
+
     spark.stop()
 
 

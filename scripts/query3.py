@@ -1,9 +1,10 @@
 # query3.py
 import time
 import logging
-from pyspark.sql import SparkSession, functions as F
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2
+from pyspark.sql import functions as F
+from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2, QUERY_3
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+from commonFunction import create_spark_session, save_execution_time
 
 # Configura il logger
 logging.basicConfig(
@@ -20,6 +21,7 @@ schema = StructType([
     StructField("cfe_percentage", DoubleType(), True),
 ])
 
+
 # Facendo riferimento al dataset dei valori energetici dell’Italia e della Svezia, aggregare i dati di ciascun
 # paese sulle 24 ore della giornata, calcolando il valor medio di “Carbon intensity gCO2eq/kWh
 # (direct)” e “Carbon-free energy percentage (CFE%)”. Calcolare il minimo, 25-esimo, 50-esimo, 75-
@@ -27,23 +29,18 @@ schema = StructType([
 # energy percentage (CFE%)”.
 
 def main():
-    spark = (SparkSession.builder
-             .appName("Q3 Energy Stats - Parquet")
-             .config("spark.sql.files.maxPartitionBytes", "128MB")
-             .config("spark.sql.parquet.filterPushdown", "true")
-             .config("spark.sql.parquet.enableVectorizedReader", "true")
-             .config("spark.sql.adaptive.enabled", "true")
-             .getOrCreate())
-    spark.sparkContext.setLogLevel("WARN")
+    spark = create_spark_session("Q3 Energy Stats")
 
     # 1) Lettura dati Parquet
     start_read = time.time()
     df = spark.read.parquet(HDFS_PARQUET_PATH)
+    print("Numero di righe:", df.count())
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
     df.show()
     df.explain(extended=True)
 
+    query_time = time.time()
     # 2. Calcola la media oraria per ciascun Paese
     intermediate_result = df.groupBy("Country", "hour").agg(
         F.avg("carbon_intensity").alias("avg_hour_carbon_intensity"),
@@ -52,7 +49,7 @@ def main():
 
     # 2. Percentili per "carbon_intensity"
     carbon_intensity_stats = intermediate_result.groupBy("Country").agg(
-        F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.0, 0.25, 0.5, 0.75, 1.0), 10000)").alias(
+        F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.0, 0.25, 0.5, 0.75, 1.0), 10)").alias(
             "percentiles")
     ).select(
         F.col("Country"),
@@ -78,12 +75,29 @@ def main():
         F.col("percentiles")[4].alias("max")
     )
 
-    # 4. Unione dei risultati finali
+    total_query_time = time.time() - query_time
+    logger.info(f"Tempo necessario per la query: {total_query_time}")
+
+    write_time_start = time.time()
+    # 4. Unione dei risultati finali e scrittura
     final_result = carbon_intensity_stats.unionByName(cfe_stats)
 
-    # 5. Visualizza risultato
-    final_result.orderBy("Country", "data").show(truncate=False)
+    (final_result
+     .coalesce(1)
+     .write
+     .mode("overwrite")
+     .option("header", True)
+     .csv(HDFS_BASE_RESULT_PATH_Q2))
+    write_time = time.time() - write_time_start
+    total_time = read_time + total_query_time + write_time
+    logger.info(f"Tempo scrittura risultati: {write_time:.10f}s")
+    logger.info(
+        f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {total_query_time}\nTempo di write: {write_time}")
+    logger.info(f"Tempo totale (read+query+write): {total_time:.10f}s")
 
+    save_execution_time(QUERY_3, read_time, total_query_time, write_time, total_time)
+
+    spark.stop()
 
 
 if __name__ == "__main__":
