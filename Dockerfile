@@ -1,6 +1,6 @@
 FROM python:3.10-bullseye as spark-base
 
-ARG SPARK_VERSION=3.3.3
+ARG SPARK_VERSION=3.5.0
 
 # Install tools required by the OS
 RUN apt-get update && \

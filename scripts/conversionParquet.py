@@ -2,7 +2,7 @@ import time
 import logging
 from pyspark.sql import SparkSession, functions as F
 from pyspark.sql.types import TimestampType, DoubleType
-from config import HDFS_BASE_PATH, HDFS_PARQUET_PATH, COUNTRIES, YEARS, HDFS_CSV_TOTAL_PATH
+from config import HDFS_BASE_PATH, HDFS_PARQUET_PATH, COUNTRIES, YEARS
 import os
 
 # Configura il logger
@@ -41,7 +41,6 @@ def main():
 
     output_path = HDFS_PARQUET_PATH
 
-    # TODO: Considerare non partizionare per year
     df.write \
         .mode("overwrite") \
         .partitionBy("Country") \

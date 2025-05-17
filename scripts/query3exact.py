@@ -1,10 +1,9 @@
-# query3.py
-import time
 import logging
+import time
+from scripts.commonFunction import create_spark_session, save_execution_time
 from pyspark.sql import functions as F
-from config import HDFS_PARQUET_PATH, QUERY_3, HDFS_BASE_RESULT_PATH_Q3
+from scripts.config import HDFS_PARQUET_PATH, QUERY_3_EXACT, HDFS_BASE_RESULT_PATH_Q3_EXACT
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
-from commonFunction import create_spark_session, save_execution_time
 
 # Configura il logger
 logging.basicConfig(
@@ -29,7 +28,7 @@ schema = StructType([
 # energy percentage (CFE%)”.
 
 def main():
-    spark = create_spark_session("Q3 Energy Stats")
+    spark = create_spark_session("Q3 Exact Energy Stats")
     # 1) Lettura dati Parquet
     start_read = time.time()
     df = spark.read.parquet(HDFS_PARQUET_PATH)
@@ -46,10 +45,10 @@ def main():
         F.avg("cfe_percentage").alias("avg_hour_cfe_percentage")
     )
 
-    # 2. Statistiche per "carbon_intensity" (usando min/max nativi)
+    # 2. Statistiche per "carbon_intensity" con percentili ESATTI
     carbon_intensity_stats = intermediate_result.groupBy("Country").agg(
         F.min("avg_hour_carbon_intensity").alias("min"),
-        F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75), 1000)").alias("quartiles"),
+        F.expr("percentile_exact(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75))").alias("quartiles"),
         F.max("avg_hour_carbon_intensity").alias("max")
     ).select(
         F.col("Country"),
@@ -61,10 +60,10 @@ def main():
         F.col("max")
     )
 
-    # 3. Statistiche per "cfe_percentage"
+    # 3. Statistiche per "cfe_percentage" con percentili ESATTI
     cfe_stats = intermediate_result.groupBy("Country").agg(
         F.min("avg_hour_cfe_percentage").alias("min"),
-        F.expr("percentile_approx(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75), 1000)").alias("quartiles"),
+        F.expr("percentile_exact(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("quartiles"),
         F.max("avg_hour_cfe_percentage").alias("max")
     ).select(
         F.col("Country"),
@@ -87,7 +86,7 @@ def main():
      .write
      .mode("overwrite")
      .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3))
+     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT))
 
     write_time = time.time() - write_time_start
     total_time = read_time + total_query_time + write_time
@@ -95,7 +94,7 @@ def main():
     logger.info(
         f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {total_query_time}\nTempo di write: {write_time}")
     logger.info(f"Tempo totale (read+query+write): {total_time:.10f}s")
-    save_execution_time(QUERY_3, read_time, total_query_time, write_time, total_time)
+    save_execution_time(QUERY_3_EXACT, read_time, total_query_time, write_time, total_time)
 
     spark.stop()
 

@@ -5,9 +5,20 @@ NIFI_PORT=8080
 HDFS_INTERVAL=10
 NIFI_INTERVAL=60
 NIFI_API_BASE_URL="http://${NIFI_HOST}:${NIFI_PORT}/nifi-api"
+NUM_RUNS=5
 
 echo "Svuoto cartelle risultati"
 docker exec namenode hdfs dfs -rm -r /electricity_data_Q1_results/*
+docker exec namenode hdfs dfs -rm -r /electricity_data_Q2_results/*
+docker exec namenode hdfs dfs -rm -r /electricity_data_csv_total/*
+
+set -euo pipefail
+
+TARGET="./benchmark"
+
+echo "Svuoto $TARGET …"
+find "$TARGET" -mindepth 1 -exec rm -rf {} +
+echo "Fatto."
 # Funzione per controllare e installare pacchetti Python
 
 install_package() {
@@ -89,7 +100,7 @@ wait_for_hdfs_data() {
 }
 
 install_package jq
-echo "🔧 1. Avvio dei servizi Docker Compose..."
+echo "1. Avvio dei servizi Docker Compose..."
 #docker-compose up --build -d --scale spark-worker=1
 #if [ $? -ne 0 ]; then
 #  echo "Errore durante l'avvio di Docker Compose."
@@ -105,33 +116,67 @@ start_root_pg
 echo "4. Attesa che i dati siano presenti in HDFS..."
 wait_for_hdfs_data
 
-#echo "5. Conversione dei dati in Parquet tramite Spark.."
-#docker exec da-spark-master spark-submit --deploy-mode client ./scripts/conversionParquet.py
-#if [ $? -ne 0 ]; then
-#  echo "Errore durante l'esecuzione dello script Spark di conversion in Parquet."
-#  exit 1
-#fi
-
-#echo "5. Esecuzione dello script Spark..."
-#docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py
-#if [ $? -ne 0 ]; then
-#  echo "Errore durante l'esecuzione della prima Query."
-#  exit 1
-#fi
-
-echo "5. Esecuzione dello script Spark 2..."
-docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2.py
+echo "5. Conversione dei dati in Parquet tramite Spark.."
+docker exec da-spark-master spark-submit --deploy-mode client ./scripts/conversionParquet.py
 if [ $? -ne 0 ]; then
-  echo "Errore durante l'esecuzione della seconda Query."
+  echo "Errore durante l'esecuzione dello script Spark di conversion in Parquet."
   exit 1
 fi
 
-#echo "6. Generiamo grafici di confronto..."
 
-#~/myenv/bin/python scripts/charts_result.py
-#echo "Grafici visibili all'indirizzo: http://127.0.0.1:8050/"
 
-#echo "6. Pulizia dei dati in HDFS..."
-#docker exec namenode hdfs dfs -rm -r /electricity_data/*
-#echo "Script completato con successo!"
-#exit 0
+#echo "5. Esecuzione della prima query..."
+#for run in $(seq 1 $NUM_RUNS); do
+#  echo "=== Run #$run ==="
+#  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py
+#  if [ $? -ne 0 ]; then
+#    echo "Errore durante l'esecuzione della prima Query."
+#    exit 1
+#  fi
+#done
+#
+#echo "5. Esecuzione della prima query SQL..."
+#for run in $(seq 1 $NUM_RUNS); do
+#  echo "=== Run #$run ==="
+#  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1SQL.py
+#  if [ $? -ne 0 ]; then
+#    echo "Errore durante l'esecuzione della prima Query SQL."
+#    exit 1
+#  fi
+#done
+
+#echo "6. Esecuzione dello script Spark 2..."
+#for run in $(seq 1 $NUM_RUNS); do
+#  echo "=== Run #$run ==="
+#  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2.py
+#  if [ $? -ne 0 ]; then
+#    echo "Errore durante l'esecuzione della seconda Query."
+#    exit 1
+#  fi
+#done
+
+
+echo "7. Esecuzione dello script Spark 3..."
+for run in $(seq 1 $NUM_RUNS); do
+  echo "=== Run #$run ==="
+  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3.py
+  if [ $? -ne 0 ]; then
+    echo "Errore durante l'esecuzione della terza Query."
+    exit 1
+  fi
+done
+
+echo "8. Esecuzione dello script Spark 3 exact..."
+for run in $(seq 1 $NUM_RUNS); do
+  echo "=== Run #$run ==="
+  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3exact.py
+  if [ $? -ne 0 ]; then
+    echo "Errore durante l'esecuzione della terza Query exact."
+    exit 1
+  fi
+done
+
+echo "6. Pulizia dei dati in HDFS..."
+docker exec namenode hdfs dfs -rm -r /electricity_data/*
+echo "Script completato con successo!"
+exit 0
