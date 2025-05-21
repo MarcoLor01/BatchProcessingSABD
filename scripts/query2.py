@@ -15,10 +15,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 schema = StructType([
-    StructField("year", IntegerType(), True),
-    StructField("month", IntegerType(), True),
-    StructField("carbon_intensity", DoubleType(), True),
-    StructField("cfe_percentage", DoubleType(), True),
+    StructField("record_year", IntegerType(), True),
+    StructField("record_month", IntegerType(), True),
+    StructField("CarbonDirect", DoubleType(), True),
+    StructField("CFEpercent", DoubleType(), True),
 ])
 
 
@@ -33,15 +33,15 @@ def main():
 
     # 1) Lettura dati Parquet
     start_read = time.time()
-    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'Italy')
+    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'IT')
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
     df.explain(extended=True)
 
     start_query = time.time()
-    result = (df.groupBy("year", "month").agg(
-        F.avg("carbon_intensity").alias("avg_carbon_intensity"),
-        F.avg("cfe_percentage").alias("avg_cfe_percentage"),
+    result = (df.groupBy("record_year", "record_month").agg(
+        F.avg("CarbonDirect").alias("avg_carbon_intensity"),
+        F.avg("CFEpercent").alias("avg_cfe_percentage"),
     ))
 
     result_carbon_desc = result.orderBy(F.col("avg_carbon_intensity").desc()).limit(5)

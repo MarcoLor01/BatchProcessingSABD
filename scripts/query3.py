@@ -15,10 +15,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 schema = StructType([
-    StructField("Country", StringType(), True),
-    StructField("hour", IntegerType(), True),
-    StructField("carbon_intensity", DoubleType(), True),
-    StructField("cfe_percentage", DoubleType(), True),
+    StructField("record_hour", IntegerType(), True),
+    StructField("CarbonDirect", DoubleType(), True),
+    StructField("CFEpercent", DoubleType(), True),
 ])
 
 
@@ -32,8 +31,7 @@ def main():
     spark = create_spark_session("Q3 Energy Stats")
     # 1) Lettura dati Parquet
     start_read = time.time()
-    df = spark.read.parquet(HDFS_PARQUET_PATH)
-    print("Numero di righe:", df.count())
+    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH)
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
     df.show()
@@ -41,9 +39,9 @@ def main():
 
     query_time = time.time()
     # 2. Calcola la media oraria per ciascun Paese
-    intermediate_result = df.groupBy("Country", "hour").agg(
-        F.avg("carbon_intensity").alias("avg_hour_carbon_intensity"),
-        F.avg("cfe_percentage").alias("avg_hour_cfe_percentage")
+    intermediate_result = df.groupBy("Country", "record_hour").agg(
+        F.avg("CarbonDirect").alias("avg_hour_carbon_intensity"),
+        F.avg("CFEpercent").alias("avg_hour_cfe_percentage")
     )
 
     # 2. Statistiche per "carbon_intensity" (usando min/max nativi)
@@ -78,10 +76,11 @@ def main():
 
     total_query_time = time.time() - query_time
     logger.info(f"Tempo necessario per la query: {total_query_time}")
-
-    write_time_start = time.time()
-    # 4. Unione dei risultati finali e scrittura
     final_result = carbon_intensity_stats.unionByName(cfe_stats)
+    final_result.show()
+    write_time_start = time.time()
+
+    # 4. Unione dei risultati finali e scrittura
     (final_result
      .coalesce(1)
      .write

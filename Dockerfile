@@ -1,4 +1,4 @@
-FROM python:3.10-bullseye as spark-base
+FROM python:3.10-bullseye AS spark-base
 
 ARG SPARK_VERSION=3.5.0
 
@@ -31,7 +31,7 @@ RUN curl https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SP
  && rm -rf spark-${SPARK_VERSION}-bin-hadoop3.tgz
 
 
-FROM spark-base as pyspark
+FROM spark-base AS pyspark
 
 # Install python deps
 COPY requirements/requirements.txt .

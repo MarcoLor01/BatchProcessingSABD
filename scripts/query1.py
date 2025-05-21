@@ -14,10 +14,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 schema = StructType([
-    StructField("Country", StringType(), True),
-    StructField("year", IntegerType(), True),
-    StructField("carbon_intensity", DoubleType(), True),
-    StructField("cfe_percentage", DoubleType(), True),
+    StructField("record_year", IntegerType(), True),
+    StructField("CarbonDirect", DoubleType(), True),
+    StructField("CFEpercent", DoubleType(), True),
 ])
 
 
@@ -33,19 +32,19 @@ def main():
     # 2) Aggregazione annuale
     start_query = time.time()
     result = (df
-              .groupBy("Country", "year")  # Wide
+              .groupBy("Country", "record_year")  # Wide
               .agg(
-        F.avg("carbon_intensity").alias("avg_carbon_intensity"),
-        F.min("carbon_intensity").alias("min_carbon_intensity"),
-        F.max("carbon_intensity").alias("max_carbon_intensity"),
-        F.avg("cfe_percentage").alias("avg_cfe_percentage"),
-        F.min("cfe_percentage").alias("min_cfe_percentage"),
-        F.max("cfe_percentage").alias("max_cfe_percentage")
-    ).orderBy("Country", "year"))  # Wide, necessario per riordinamento
+        F.avg("CarbonDirect").alias("avg_carbon_intensity"),
+        F.min("CarbonDirect").alias("min_carbon_intensity"),
+        F.max("CarbonDirect").alias("max_carbon_intensity"),
+        F.avg("CFEpercent").alias("avg_cfe_percentage"),
+        F.min("CFEpercent").alias("min_cfe_percentage"),
+        F.max("CFEpercent").alias("max_cfe_percentage")
+    ).orderBy("Country", "record_year"))  # Wide, necessario per riordinamento
 
     query_time = time.time() - start_query
     logger.info(f"Tempo esecuzione query: {query_time:.10f}s")
-
+    result.show()
     # Stampa piano di esecuzione e DAG
     logger.info("=== Piano di esecuzione (logical & physical) ===")
     result.explain(extended=True)

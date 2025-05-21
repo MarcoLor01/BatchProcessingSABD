@@ -13,10 +13,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 schema = StructType([
-    StructField("Country", StringType(), True),
-    StructField("year", IntegerType(), True),
-    StructField("carbon_intensity", DoubleType(), True),
-    StructField("cfe_percentage", DoubleType(), True),
+    StructField("record_year", IntegerType(), True),
+    StructField("CarbonDirect", DoubleType(), True),
+    StructField("CFEpercent", DoubleType(), True),
 ])
 
 
@@ -37,23 +36,24 @@ def main():
     sql_query = """
     SELECT 
         Country,
-        year,
-        AVG(carbon_intensity) AS avg_carbon_intensity,
-        MIN(carbon_intensity) AS min_carbon_intensity,
-        MAX(carbon_intensity) AS max_carbon_intensity,
-        AVG(cfe_percentage) AS avg_cfe_percentage,
-        MIN(cfe_percentage) AS min_cfe_percentage,
-        MAX(cfe_percentage) AS max_cfe_percentage
+        record_year,
+        AVG(CarbonDirect) AS avg_carbon_intensity,
+        MIN(CarbonDirect) AS min_carbon_intensity,
+        MAX(CarbonDirect) AS max_carbon_intensity,
+        AVG(CFEpercent) AS avg_cfe_percentage,
+        MIN(CFEpercent) AS min_cfe_percentage,
+        MAX(CFEpercent) AS max_cfe_percentage
     FROM 
         energy_data
     GROUP BY 
-        Country, year
+        Country, record_year
     ORDER BY 
-        Country, year
+        Country, record_year
     """
 
     result = spark.sql(sql_query)
     query_time = time.time() - start_query
+    result.show()
     logger.info(f"Tempo esecuzione query: {query_time:.10f}s")
 
     # Stampa piano di esecuzione e DAG

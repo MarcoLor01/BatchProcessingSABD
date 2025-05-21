@@ -5,8 +5,9 @@ NIFI_PORT=8080
 HDFS_INTERVAL=10
 NIFI_INTERVAL=60
 NIFI_API_BASE_URL="http://${NIFI_HOST}:${NIFI_PORT}/nifi-api"
-NUM_RUNS=5
-
+NUM_RUNS=1
+docker exec namenode hdfs dfsadmin -safemode leave
+#Crea cartelle!!
 echo "Svuoto cartelle risultati"
 docker exec namenode hdfs dfs -rm -r /electricity_data_Q1_results/*
 docker exec namenode hdfs dfs -rm -r /electricity_data_Q2_results/*
@@ -76,12 +77,12 @@ start_root_pg() {
 }
 
 wait_for_hdfs_data() {
-  echo "Attendo che HDFS contenga dati nella cartella electricity_data..."
+  echo "Attendo che HDFS contenga dati nella cartella electricity_data_parquet..."
   MAX_RETRIES=30
   RETRIES=0
 
   while true; do
-    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /electricity_data 2>/dev/null | grep -v '^Found' | wc -l)
+    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /electricity_data_parquet 2>/dev/null | grep -v '^Found' | wc -l)
 
     if [ "$FILE_COUNT" -gt 0 ]; then
       echo "Dati trovati in HDFS."
@@ -94,7 +95,7 @@ wait_for_hdfs_data() {
       exit 1
     fi
 
-    echo "Nessun dato ancora in HDFS, ritento tra ${HDFS_INTERVAL}s..."
+    echo "Nessun dato ancora in HDFS, ritento tra ${HDFS_INTERVAL} s..."
     sleep ${HDFS_INTERVAL}
   done
 }
@@ -116,15 +117,6 @@ start_root_pg
 echo "4. Attesa che i dati siano presenti in HDFS..."
 wait_for_hdfs_data
 
-echo "5. Conversione dei dati in Parquet tramite Spark.."
-docker exec da-spark-master spark-submit --deploy-mode client ./scripts/conversionParquet.py
-if [ $? -ne 0 ]; then
-  echo "Errore durante l'esecuzione dello script Spark di conversion in Parquet."
-  exit 1
-fi
-
-
-
 #echo "5. Esecuzione della prima query..."
 #for run in $(seq 1 $NUM_RUNS); do
 #  echo "=== Run #$run ==="
@@ -134,16 +126,18 @@ fi
 #    exit 1
 #  fi
 #done
-#
-#echo "5. Esecuzione della prima query SQL..."
-#for run in $(seq 1 $NUM_RUNS); do
-#  echo "=== Run #$run ==="
-#  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1SQL.py
-#  if [ $? -ne 0 ]; then
-#    echo "Errore durante l'esecuzione della prima Query SQL."
-#    exit 1
-#  fi
-#done
+
+
+echo "5. Esecuzione della prima query SQL..."
+for run in $(seq 1 $NUM_RUNS); do
+  echo "=== Run #$run ==="
+  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1SQL.py
+  if [ $? -ne 0 ]; then
+    echo "Errore durante l'esecuzione della prima Query SQL."
+    exit 1
+  fi
+done
+
 
 #echo "6. Esecuzione dello script Spark 2..."
 #for run in $(seq 1 $NUM_RUNS); do
@@ -155,23 +149,42 @@ fi
 #  fi
 #done
 
-
-echo "7. Esecuzione dello script Spark 3..."
+echo "5. Esecuzione della seconda query SQL..."
 for run in $(seq 1 $NUM_RUNS); do
   echo "=== Run #$run ==="
-  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3.py
+  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2SQL.py
   if [ $? -ne 0 ]; then
-    echo "Errore durante l'esecuzione della terza Query."
+    echo "Errore durante l'esecuzione della seconda Query SQL."
     exit 1
   fi
 done
 
-echo "8. Esecuzione dello script Spark 3 exact..."
+#echo "7. Esecuzione dello script Spark 3..."
+#for run in $(seq 1 $NUM_RUNS); do
+#  echo "=== Run #$run ==="
+#  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3.py
+#  if [ $? -ne 0 ]; then
+#    echo "Errore durante l'esecuzione della terza Query."
+#    exit 1
+#  fi
+#done
+#
+#echo "8. Esecuzione dello script Spark 3 exact..."
+#for run in $(seq 1 $NUM_RUNS); do
+#  echo "=== Run #$run ==="
+#  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3exact.py
+#  if [ $? -ne 0 ]; then
+#    echo "Errore durante l'esecuzione della terza Query exact."
+#    exit 1
+#  fi
+#done
+
+echo "5. Esecuzione della terza query SQL..."
 for run in $(seq 1 $NUM_RUNS); do
   echo "=== Run #$run ==="
-  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3exact.py
+  docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3SQL.py
   if [ $? -ne 0 ]; then
-    echo "Errore durante l'esecuzione della terza Query exact."
+    echo "Errore durante l'esecuzione della terza Query SQL."
     exit 1
   fi
 done
