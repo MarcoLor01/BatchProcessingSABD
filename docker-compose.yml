@@ -1,5 +1,4 @@
 services:
-
   namenode:
     image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
     container_name: namenode
@@ -22,6 +21,9 @@ services:
     container_name: datanode
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - SPARK_WORKER_MEMORY=512m
+      - SPARK_DRIVER_MEMORY=512m
+      - SPARK_EXECUTOR_MEMORY=512m
     depends_on:
       - namenode
     volumes:
@@ -31,6 +33,23 @@ services:
       - data_network
     restart: always
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - data_network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
   nifi:
     image: apache/nifi:1.15.3  # Versione stabile e più facile da configurare
     container_name: nifi
@@ -39,6 +58,7 @@ services:
     depends_on:
       - namenode
       - datanode
+      - redis
     environment:
       - NIFI_WEB_HTTP_PORT=8080  # Forza HTTP
       - NIFI_WEB_HTTP_HOST=0.0.0.0
@@ -76,6 +96,9 @@ services:
       - ./benchmark:/app/benchmark
     env_file:
       - .env.spark
+    environment:
+      - SPARK_DRIVER_MEMORY=512m
+      - SPARK_EXECUTOR_MEMORY=512m
     networks:
       - data_network
     ports:
@@ -83,13 +106,17 @@ services:
       - '7077:7077'
 
   spark-worker:
-    container_name: da-spark-worker
     image: da-spark-image
     entrypoint: [ './entrypoint.sh', 'worker' ]
     depends_on:
       - spark-master
     env_file:
       - .env.spark
+    environment:
+      - SPARK_WORKER_MEMORY=1g
+      # opzionale: imposta anche executor/driver memory qui se usi deploy-mode=cluster
+      - SPARK_DRIVER_MEMORY=512m
+      - SPARK_EXECUTOR_MEMORY=1g
     volumes:
       - ./scripts:/opt/spark/scripts
       - spark-logs:/opt/spark/spark-events
@@ -109,6 +136,8 @@ services:
       - spark-logs:/opt/spark/spark-events
     ports:
       - '18080:18080'
+    networks:
+      - data_network
 
 networks:
   data_network:
@@ -117,6 +146,7 @@ networks:
 volumes:
   namenode_data:
   datanode_data:
+  redis_data:
   nifi_conf:
   nifi_state:
   nifi_content_repository:

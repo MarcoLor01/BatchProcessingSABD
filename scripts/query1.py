@@ -1,4 +1,5 @@
 # query1.py
+import sys
 import time
 import logging
 from pyspark.sql import functions as F
@@ -20,7 +21,7 @@ schema = StructType([
 ])
 
 
-def main():
+def main(workers_number: int):
     spark = create_spark_session("Q1 Energy Stats")
 
     # 1) Lettura dati Parquet
@@ -45,9 +46,6 @@ def main():
     query_time = time.time() - start_query
     logger.info(f"Tempo esecuzione query: {query_time:.10f}s")
     result.show()
-    # Stampa piano di esecuzione e DAG
-    logger.info("=== Piano di esecuzione (logical & physical) ===")
-    result.explain(extended=True)
 
     # 3) Scrittura risultati
     start_write = time.time()
@@ -64,10 +62,11 @@ def main():
     logger.info(f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {query_time}\nTempo di write: {write_time}")
     logger.info(f"Tempo totale (read+query+write): {total:.10f}s")
 
-    save_execution_time(QUERY_1, read_time, query_time, write_time, total)
+    save_execution_time(QUERY_1, workers_number, read_time, query_time, write_time, total)
 
     spark.stop()
 
 
 if __name__ == "__main__":
-    main()
+    workers_number = int(sys.argv[1])
+    main(workers_number)

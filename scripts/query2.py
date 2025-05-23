@@ -42,7 +42,9 @@ def main():
     result = (df.groupBy("record_year", "record_month").agg(
         F.avg("CarbonDirect").alias("avg_carbon_intensity"),
         F.avg("CFEpercent").alias("avg_cfe_percentage"),
-    ))
+    ).cache())
+
+    result.count()
 
     result_carbon_desc = result.orderBy(F.col("avg_carbon_intensity").desc()).limit(5)
     result_carbon_asc = result.orderBy(F.col("avg_carbon_intensity").asc()).limit(5)

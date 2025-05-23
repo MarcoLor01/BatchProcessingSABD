@@ -1,6 +1,6 @@
 import time
 import logging
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1, QUERY_1_SQL
+from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1_SQL, QUERY_1_SQL
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from scripts.commonFunction import save_execution_time, create_spark_session
 
@@ -13,6 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 schema = StructType([
+    StructField("Country", StringType(), True),
     StructField("record_year", IntegerType(), True),
     StructField("CarbonDirect", DoubleType(), True),
     StructField("CFEpercent", DoubleType(), True),
@@ -25,7 +26,7 @@ def main():
     # 1) Lettura dati Parquet
     start_read = time.time()
     df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH)
-    df.createOrReplaceTempView("energy_data") #Per fare query SQL
+    df.createOrReplaceTempView("energy_data")
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
     df.show()
@@ -67,7 +68,7 @@ def main():
      .write
      .mode("overwrite")
      .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q1))
+     .csv(HDFS_BASE_RESULT_PATH_Q1_SQL))
     write_time = time.time() - start_write
     logger.info(f"Tempo scrittura risultati: {write_time:.10f}s")
 

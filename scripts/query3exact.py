@@ -44,39 +44,39 @@ def main():
         F.avg("CFEpercent").alias("avg_hour_cfe_percentage")
     )
 
-    # 2. Statistiche per "carbon_intensity" con percentili ESATTI
-    carbon_intensity_stats = intermediate_result.groupBy("Country").agg(
-        F.min("avg_hour_carbon_intensity").alias("min"),
-        F.expr("percentile(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75))").alias("quartiles"),
-        F.max("avg_hour_carbon_intensity").alias("max")
-    ).select(
-        F.col("Country"),
-        F.lit("carbon-intensity").alias("data"),
-        F.col("min"),
-        F.col("quartiles")[0].alias("perc_25"),
-        F.col("quartiles")[1].alias("perc_50"),
-        F.col("quartiles")[2].alias("perc_75"),
-        F.col("max")
+    carbon_stats = intermediate_result.groupBy("Country").agg(
+        F.min("avg_hour_carbon_intensity").alias("carbon_min"),
+        F.expr("percentile(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("carbon_quartiles"),
+        F.max("avg_hour_carbon_intensity").alias("carbon_max"),
+        F.min("avg_hour_cfe_percentage").alias("cfe_min"),
+        F.expr("percentile(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("cfe_quartiles"),
+        F.max("avg_hour_cfe_percentage").alias("cfe_max")
     )
 
-    # 3. Statistiche per "cfe_percentage" con percentili ESATTI
-    cfe_stats = intermediate_result.groupBy("Country").agg(
-        F.min("avg_hour_cfe_percentage").alias("min"),
-        F.expr("percentile(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("quartiles"),
-        F.max("avg_hour_cfe_percentage").alias("max")
-    ).select(
+    # Reshape per il formato finale
+    carbon_result = carbon_stats.select(
+        F.col("Country"),
+        F.lit("carbon-intensity").alias("data"),
+        F.col("carbon_min").alias("min"),
+        F.col("carbon_quartiles")[0].alias("perc_25"),
+        F.col("carbon_quartiles")[1].alias("perc_50"),
+        F.col("carbon_quartiles")[2].alias("perc_75"),
+        F.col("carbon_max").alias("max")
+    )
+
+    cfe_result = carbon_stats.select(
         F.col("Country"),
         F.lit("cfe").alias("data"),
-        F.col("min"),
-        F.col("quartiles")[0].alias("perc_25"),
-        F.col("quartiles")[1].alias("perc_50"),
-        F.col("quartiles")[2].alias("perc_75"),
-        F.col("max")
+        F.col("cfe_min").alias("min"),
+        F.col("cfe_quartiles")[0].alias("perc_25"),
+        F.col("cfe_quartiles")[1].alias("perc_50"),
+        F.col("cfe_quartiles")[2].alias("perc_75"),
+        F.col("cfe_max").alias("max")
     )
 
     total_query_time = time.time() - query_time
     logger.info(f"Tempo necessario per la query: {total_query_time}")
-    final_result = carbon_intensity_stats.unionByName(cfe_stats)
+    final_result = carbon_result.unionByName(cfe_result)
     final_result.show()
     write_time_start = time.time()
     # 4. Unione dei risultati finali e scrittura
