@@ -86,8 +86,8 @@ for WORKERS in 1 2 3; do
   echo "=== ESECUZIONE CON ${WORKERS} WORKER(S) ==="
 
   echo "1. Avvio dei servizi Docker Compose con ${WORKERS} worker..."
-  docker-compose down
-  docker-compose up --build -d --scale spark-worker=$WORKERS
+  #docker-compose down
+  #docker-compose up --build -d --scale spark-worker=$WORKERS
   if [ $? -ne 0 ]; then
     echo "Errore durante l'avvio di Docker Compose."
     exit 1
@@ -105,8 +105,11 @@ for WORKERS in 1 2 3; do
   for run in $(seq 1 $NUM_RUNS); do
     echo "=== Run #$run con ${WORKERS} worker(s) ==="
 
-    echo "Esecuzione query1.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py $WORKERS || exit 1
+    echo "Esecuzione query1RDD.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1RDD.py $WORKERS || exit 1
+
+    #echo "Esecuzione query1.py..."
+    #docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py $WORKERS || exit 1
 
     echo "Esecuzione query1SQL.py..."
     #docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1SQL.py || exit 1

@@ -9,6 +9,7 @@ HDFS_BASE_RESULT_PATH_Q3_EXACT = "hdfs://namenode:9000/result/query3exact/"
 HDFS_BASE_RESULT_PATH_Q1_SQL = "hdfs://namenode:9000/result/query1sql/"
 HDFS_BASE_RESULT_PATH_Q2_SQL = "hdfs://namenode:9000/result/query2sql/"
 HDFS_BASE_RESULT_PATH_Q3_SQL = "hdfs://namenode:9000/result/query3sql/"
+HDFS_BASE_RESULT_PATH_Q1_RDD = "hdfs://namenode:9000/result/query1rdd/"
 
 RESULTS_CSV = "/app/benchmark/execution_time.csv"
 HDFS_CSV_TOTAL_PATH = "hdfs://namenode:9000/electricity_data_csv_total"
@@ -19,3 +20,4 @@ QUERY_3_EXACT = 4
 QUERY_1_SQL = 5
 QUERY_2_SQL = 6
 QUERY_3_SQL = 7
+QUERY_1_RDD= 8

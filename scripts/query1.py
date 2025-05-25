@@ -12,9 +12,11 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
 logger = logging.getLogger(__name__)
 
 schema = StructType([
+    StructField("Country", StringType(), True),
     StructField("record_year", IntegerType(), True),
     StructField("CarbonDirect", DoubleType(), True),
     StructField("CFEpercent", DoubleType(), True),
