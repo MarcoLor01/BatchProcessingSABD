@@ -1,7 +1,7 @@
 import sys
 import time
 import logging
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2, QUERY_2
+from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2_RDD, QUERY_2_RDD
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from commonFunction import create_spark_session, save_execution_time
 
@@ -40,7 +40,7 @@ def main(workers_number: int):
     logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
 
     rdd = df.rdd
-
+    query_initial_time = time.time()
     pairs = rdd.map(lambda row: ( # Trasformazione
     (row.record_year, row.record_month),
     (row.CarbonDirect, # Per media
@@ -90,7 +90,7 @@ def main(workers_number: int):
 
     all_results_list = rdd_bottom_5_carbonDirect + rdd_top_5_carbonDirect + rdd_bottom_5_fce + rdd_top_5_fce
     all_results_rdd  = spark.sparkContext.parallelize(all_results_list)
-
+    query_time = time.time() - query_initial_time
     # 2) Definisci l’header CSV
     header = (
     "record_year,record_month,avg_carbon_intensity,avg_cfe_percentage"
@@ -109,9 +109,12 @@ def main(workers_number: int):
 
     # 5) Scrivi su HDFS
     start_write = time.time()
-    final_rdd.saveAsTextFile(HDFS_BASE_RESULT_PATH_Q2)
+    final_rdd.saveAsTextFile(HDFS_BASE_RESULT_PATH_Q2_RDD)
     write_time = time.time() - start_write
     logger.info(f"Tempo scrittura risultati: {write_time:.4f}s")
+
+    total_time = read_time + query_time + write_time
+    save_execution_time(QUERY_2_RDD, workers_number, read_time, query_time, write_time, total_time)
 
     spark.stop()
 

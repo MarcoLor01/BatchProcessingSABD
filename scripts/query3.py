@@ -14,7 +14,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Schema corretto - include Country
 schema = StructType([
     StructField("Country", StringType(), True),  # AGGIUNTO
     StructField("record_hour", IntegerType(), True),
