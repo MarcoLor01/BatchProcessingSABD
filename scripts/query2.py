@@ -44,7 +44,6 @@ def main():
         F.avg("CFEpercent").alias("avg_cfe_percentage"),
     ).cache())
 
-    result.count()
 
     result_carbon_desc = result.orderBy(F.col("avg_carbon_intensity").desc()).limit(5)
     result_carbon_asc = result.orderBy(F.col("avg_carbon_intensity").asc()).limit(5)
@@ -53,10 +52,7 @@ def main():
 
     query_time = time.time() - start_query
     logger.info(f"Tempo esecuzione query: {query_time:.10f}s")
-    result_carbon_desc.show()
-    result_carbon_asc.show()
-    cfe_percentage_desc.show()
-    cfe_percentage_asc.show()
+
 
     start_write = time.time()
     all_results = result_carbon_desc.union(result_carbon_asc).union(cfe_percentage_desc).union(cfe_percentage_asc)

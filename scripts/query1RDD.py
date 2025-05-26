@@ -32,10 +32,9 @@ def main(workers_number: int):
     read_time = time.time() - start_read
     logger.info(f"Tempo lettura Parquet: {read_time:.4f}s")
 
-    # 2) Aggregazione usando aggregateByKey
     start_query = time.time()
 
-    pairs = rdd.map(lambda row: (
+    pairs = rdd.map(lambda row: ( # Trasformazione
         (row.Country, row.record_year),  # Key
         (row.CarbonDirect,  # Per media
          row.CFEpercent,  # Per media
@@ -73,8 +72,14 @@ def main(workers_number: int):
             max(a[6], b[6])
         )
 
+    # aggregateByKey ci permette di eseguire operazione su coppie kv, parametri:
+    # valore zero: stato iniziale
+    # seq_op: itero su tutte le coppie all'interno di una partizione ed eseguo la funzione
+    # comb_op: combino a questo punto le varie partizioni
+
     aggregated = pairs.aggregateByKey(zero, seq_op, comb_op)
-    # Calcola medie e riformatta
+
+    # Calcola valori finali
     result_rdd = aggregated.map(lambda kv: (
         kv[0][0],  # Country
         kv[0][1],  # record_year

@@ -1,11 +1,8 @@
 Nella 2) Window Function
 Nella 2) Caching
 
-Spostare conversione a NiFi FATTO
 Fare grafici dei risultati richiesti nelle query
 Fare le 3 query anche in SQL
 Gestire caricamento del Process Group su NiFi automatico
 
-AGGIUNGERE DA SH
-hdfs dfs -mkdir /electricity_data_parquet
-hdfs dfs -chown nifi:supergroup /electricity_data_parquet
+Valutare repartition su RDD

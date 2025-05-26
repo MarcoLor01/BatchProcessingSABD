@@ -108,6 +108,9 @@ for WORKERS in 1 2 3; do
     echo "Esecuzione query1RDD.py..."
     docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1RDD.py $WORKERS || exit 1
 
+    echo "Esecuzione query1RDD.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2RDD.py $WORKERS || exit 1
+
     #echo "Esecuzione query1.py..."
     #docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py $WORKERS || exit 1
 
