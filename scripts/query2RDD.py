@@ -21,6 +21,7 @@ schema = StructType([
     StructField("CFEpercent", DoubleType(), True),
 ])
 
+
 # Query 2: Considerando il solo dataset italiano, aggregare i dati sulla coppia (anno, mese), calcolando il valor
 # medio di “Carbon intensity gCO2eq/kWh (direct)” e “Carbon-free energy percentage (CFE%)”. Calcolare
 # la classifica delle prime 5 coppie (anno, mese) ordinando per“Carbon intensity gCO2eq/kWh
@@ -41,11 +42,11 @@ def main(workers_number: int):
 
     rdd = df.rdd
     query_initial_time = time.time()
-    pairs = rdd.map(lambda row: ( # Trasformazione
-    (row.record_year, row.record_month),
-    (row.CarbonDirect, # Per media
-     row.CFEpercent, # Per media
-     1)
+    pairs = rdd.map(lambda row: (  # Trasformazione
+        (row.record_year, row.record_month),
+        (row.CarbonDirect,  # Per media
+         row.CFEpercent,  # Per media
+         1)
     ))
 
     zero = (0.0, 0.0, 0)
@@ -69,18 +70,18 @@ def main(workers_number: int):
     aggregated = pairs.aggregateByKey(zero, seq_op, comb_op)
 
     result_rdd = aggregated.map(lambda kv: (
-        kv[0][0], # Anno
-        kv[0][1], # Mese
+        kv[0][0],  # Anno
+        kv[0][1],  # Mese
         kv[1][0] / kv[1][2],
         kv[1][1] / kv[1][2],
-    )).cache() #RDD[(Anno, mese, avgC, avgF)]
+    )).cache()  # RDD[(Anno, mese, avgC, avgF)]
 
     # Adesso ho bisogno dei top/bottom 5 per carbon e fce,
     # usiamo takeOrdered e top.
-    #takeOrdered: RDD.takeOrdered(num: int, key: Optional[Callable[[T], S]] = None) → List[T]
+    # takeOrdered: RDD.takeOrdered(num: int, key: Optional[Callable[[T], S]] = None) → List[T]
     # num rappresenta quanti ne vogliamo; key è la chiave su cui ordiniamo
 
-    #top: RDD.top(num: int, key: Optional[Callable[[T], S]] = None) → List[T]
+    # top: RDD.top(num: int, key: Optional[Callable[[T], S]] = None) → List[T]
     # Stessi parametri
 
     rdd_bottom_5_carbonDirect = result_rdd.takeOrdered(5, key=lambda x: x[2])
@@ -88,12 +89,12 @@ def main(workers_number: int):
     rdd_top_5_carbonDirect = result_rdd.top(5, key=lambda x: x[2])
     rdd_top_5_fce = result_rdd.top(5, key=lambda x: x[3])
 
-    all_results_list = rdd_bottom_5_carbonDirect + rdd_top_5_carbonDirect + rdd_bottom_5_fce + rdd_top_5_fce
-    all_results_rdd  = spark.sparkContext.parallelize(all_results_list)
+    all_results_list = rdd_top_5_carbonDirect + rdd_bottom_5_carbonDirect + rdd_top_5_fce + rdd_bottom_5_fce
+    all_results_rdd = spark.sparkContext.parallelize(all_results_list)
     query_time = time.time() - query_initial_time
     # 2) Definisci l’header CSV
     header = (
-    "record_year,record_month,avg_carbon_intensity,avg_cfe_percentage"
+        "record_year,record_month,avg_carbon_intensity,avg_cfe_percentage"
     )
 
     # 3) Trasforma le tuple in linee CSV
@@ -102,9 +103,9 @@ def main(workers_number: int):
     # 4) Prepara l'RDD finale con header + dati, coalesciando in 1 partizione
     final_rdd = (
         spark.sparkContext
-             .parallelize([header])
-             .union(csv_rdd)
-             .coalesce(1)
+        .parallelize([header])
+        .union(csv_rdd)
+        .coalesce(1)
     )
 
     # 5) Scrivi su HDFS
@@ -118,7 +119,7 @@ def main(workers_number: int):
 
     spark.stop()
 
+
 if __name__ == "__main__":
     workers_number = int(sys.argv[1])
     main(workers_number)
-

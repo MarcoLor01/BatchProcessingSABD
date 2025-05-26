@@ -105,11 +105,17 @@ for WORKERS in 1 2 3; do
   for run in $(seq 1 $NUM_RUNS); do
     echo "=== Run #$run con ${WORKERS} worker(s) ==="
 
-    echo "Esecuzione query1RDD.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1RDD.py $WORKERS || exit 1
+    #echo "Esecuzione query1RDD.py..."
+    #docker exec -it namenode hdfs dfs -rm -r /result/query1rdd
+    #docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1RDD.py $WORKERS || exit 1
 
-    echo "Esecuzione query1RDD.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2RDD.py $WORKERS || exit 1
+    #echo "Esecuzione query2RDD.py..."
+    #docker exec -it namenode hdfs dfs -rm -r /result/query2rdd
+    #docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query2RDD.py $WORKERS || exit 1
+
+    echo "Esecuzione query3RDD.py..."
+    docker exec -it namenode hdfs dfs -rm -r /result/query3rdd
+    docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query3RDD.py $WORKERS || exit 1
 
     #echo "Esecuzione query1.py..."
     #docker exec da-spark-master spark-submit --deploy-mode client ./scripts/query1.py $WORKERS || exit 1
