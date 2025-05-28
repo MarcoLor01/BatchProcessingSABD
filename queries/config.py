@@ -13,7 +13,6 @@ HDFS_BASE_RESULT_PATH_Q1_RDD = "hdfs://namenode:9000/result/query1rdd/"
 HDFS_BASE_RESULT_PATH_Q2_RDD = "hdfs://namenode:9000/result/query2rdd/"
 HDFS_BASE_RESULT_PATH_Q3_RDD = "hdfs://namenode:9000/result/query3rdd/"
 
-RESULTS_CSV = "/app/benchmark/execution_time.csv"
 HDFS_CSV_TOTAL_PATH = "hdfs://namenode:9000/electricity_data_csv_total"
 QUERY_1 = 1
 QUERY_2 = 2

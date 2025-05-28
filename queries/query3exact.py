@@ -1,8 +1,9 @@
 import logging
+import sys
 import time
-from scripts.commonFunction import create_spark_session, save_execution_time
+from queries.commonFunction import create_spark_session, save_execution_time
 from pyspark.sql import functions as F
-from scripts.config import HDFS_PARQUET_PATH, QUERY_3_EXACT, HDFS_BASE_RESULT_PATH_Q3_EXACT
+from queries.config import HDFS_PARQUET_PATH, QUERY_3_EXACT, HDFS_BASE_RESULT_PATH_Q3_EXACT
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 
 # Configura il logger
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 schema = StructType([
     StructField("Country", StringType(), True),
-    StructField("record_hour", IntegerType(), True),
+    StructField("event_time", StringType(), True),
     StructField("CarbonDirect", DoubleType(), True),
     StructField("CFEpercent", DoubleType(), True),
 ])
@@ -27,26 +28,24 @@ schema = StructType([
 # esimo percentile e massimo del valor medio di “Carbon intensity gCO2eq/kWh (direct)” e “Carbonfree
 # energy percentage (CFE%)”.
 
-def main():
+def main(workers_number: int):
     spark = create_spark_session("Q3 Exact Energy Stats")
     # 1) Lettura dati Parquet
     start_read = time.time()
-    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH)
-    read_time = time.time() - start_read
-    logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
-    df.show()
-    df.explain(extended=True)
 
-    query_time = time.time()
+    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
+    F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_hour", F.hour("event_time"))
+
     # 2. Calcola la media oraria per ciascun Paese
     intermediate_result = df.groupBy("Country", "record_hour").agg(
         F.avg("CarbonDirect").alias("avg_hour_carbon_intensity"),
-        F.avg("CFEpercent").alias("avg_hour_cfe_percentage")
+        F.avg("CFEpercent").alias("avg_hour_cfe_percentage"),
+        F.min("event_time").alias("hour_timestamp")
     )
 
     carbon_stats = intermediate_result.groupBy("Country").agg(
         F.min("avg_hour_carbon_intensity").alias("carbon_min"),
-        F.expr("percentile(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("carbon_quartiles"),
+        F.expr("percentile(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75))").alias("carbon_quartiles"),  # Corretto
         F.max("avg_hour_carbon_intensity").alias("carbon_max"),
         F.min("avg_hour_cfe_percentage").alias("cfe_min"),
         F.expr("percentile(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("cfe_quartiles"),
@@ -74,30 +73,32 @@ def main():
         F.col("cfe_max").alias("max")
     )
 
-    total_query_time = time.time() - query_time
-    logger.info(f"Tempo necessario per la query: {total_query_time}")
     final_result = carbon_result.unionByName(cfe_result)
-    final_result.show()
-    write_time_start = time.time()
+    total_time = time.time() - start_read
     # 4. Unione dei risultati finali e scrittura
 
+    # === CSV 1: STATISTICHE DESCRITTIVE ===
     (final_result
      .coalesce(1)
      .write
      .mode("overwrite")
      .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT))
+     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "stats"))
 
-    write_time = time.time() - write_time_start
-    total_time = read_time + total_query_time + write_time
-    logger.info(f"Tempo scrittura risultati: {write_time:.10f}s")
-    logger.info(
-        f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {total_query_time}\nTempo di write: {write_time}")
-    logger.info(f"Tempo totale (read+query+write): {total_time:.10f}s")
-    save_execution_time(QUERY_3_EXACT, read_time, total_query_time, write_time, total_time)
+    # === CSV 2: ANDAMENTO ORARIO (per grafici Grafana) ===
+    (intermediate_result
+     .orderBy("Country", "record_hour")
+     .coalesce(1)
+     .write
+     .mode("overwrite")
+     .option("header", True)
+     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "hourly"))
+
+    save_execution_time(QUERY_3_EXACT, workers_number, total_time)
 
     spark.stop()
 
 
 if __name__ == "__main__":
-    main()
+    workers_number = int(sys.argv[1])
+    main(workers_number)

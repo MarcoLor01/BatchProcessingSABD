@@ -21,9 +21,6 @@ services:
     container_name: datanode
     environment:
       - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
-      - SPARK_WORKER_MEMORY=512m
-      - SPARK_DRIVER_MEMORY=512m
-      - SPARK_EXECUTOR_MEMORY=512m
     depends_on:
       - namenode
     volumes:
@@ -90,15 +87,12 @@ services:
       timeout: 3s
       retries: 3
     volumes:
-      - ./scripts:/opt/spark/scripts
+      - ./queries:/opt/spark/queries
       - spark-logs:/opt/spark/spark-events
       - ./hadoop_conf:/opt/hadoop/etc/hadoop
       - ./benchmark:/app/benchmark
     env_file:
       - .env.spark
-    environment:
-      - SPARK_DRIVER_MEMORY=512m
-      - SPARK_EXECUTOR_MEMORY=512m
     networks:
       - data_network
     ports:
@@ -114,11 +108,9 @@ services:
       - .env.spark
     environment:
       - SPARK_WORKER_MEMORY=1g
-      # opzionale: imposta anche executor/driver memory qui se usi deploy-mode=cluster
-      - SPARK_DRIVER_MEMORY=512m
-      - SPARK_EXECUTOR_MEMORY=1g
+      - SPARK_WORKER_CORES=1
     volumes:
-      - ./scripts:/opt/spark/scripts
+      - ./queries:/opt/spark/queries
       - spark-logs:/opt/spark/spark-events
       - ./hadoop_conf:/opt/hadoop/etc/hadoop
     networks:

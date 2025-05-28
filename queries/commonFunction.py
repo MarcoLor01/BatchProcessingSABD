@@ -1,10 +1,10 @@
 import csv
 import os
-from config import RESULTS_CSV
 from pyspark.sql import SparkSession
 
+RESULTS_CSV = "/app/benchmark/execution_time.csv"
 
-def save_execution_time(query_number, workers_number, tempo_lettura, tempo_query, tempo_scrittura, tempo_totale,
+def save_execution_time(query_number, workers_number, tempo_totale,
                         filename=RESULTS_CSV):
     print("Scrivo dati su CSV")
     file_esiste = os.path.isfile(filename)
@@ -14,15 +14,12 @@ def save_execution_time(query_number, workers_number, tempo_lettura, tempo_query
 
         if not file_esiste:
             print("Prima scrittura, aggiungo intestazione")
-            writer.writerow(["query", "workers_number", "tempo_lettura", "tempo_query", "tempo_scrittura"])
+            writer.writerow(["query", "workers_number", "tempo_totale"])
 
         # Scrive una nuova riga con data/ora e i tre tempi
         writer.writerow([
             query_number,
             workers_number,
-            round(tempo_lettura, 6),
-            round(tempo_query, 6),
-            round(tempo_scrittura, 6),
             round(tempo_totale, 6),
         ])
     print("Dati scritti")
@@ -38,3 +35,4 @@ def create_spark_session(app_name):
              .getOrCreate())
     spark.sparkContext.setLogLevel("WARN")
     return spark
+

@@ -1,8 +1,10 @@
+import sys
 import time
 import logging
 from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1_SQL, QUERY_1_SQL
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
-from scripts.commonFunction import save_execution_time, create_spark_session
+from queries.commonFunction import save_execution_time, create_spark_session
+from pyspark.sql import functions as F
 
 # Configura il logger
 logging.basicConfig(
@@ -14,25 +16,22 @@ logger = logging.getLogger(__name__)
 
 schema = StructType([
     StructField("Country", StringType(), True),
-    StructField("record_year", IntegerType(), True),
+    StructField("event_time", StringType(), True),
     StructField("CarbonDirect", DoubleType(), True),
     StructField("CFEpercent", DoubleType(), True),
 ])
 
 
-def main():
+def main(workers_number: int):
     spark = create_spark_session("Q1 Energy Stats SQL")
 
     # 1) Lettura dati Parquet
-    start_read = time.time()
-    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH)
-    df.createOrReplaceTempView("energy_data")
-    read_time = time.time() - start_read
-    logger.info(f"Tempo lettura Parquet: {read_time:.10f}s")
-    df.show()
+    start_time = time.time()
 
-    # 2) Aggregazione annuale con SQL
-    start_query = time.time()
+    (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
+    F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn(
+    "record_year", F.year("event_time"))
+    .createOrReplaceTempView("energy_data"))
 
     sql_query = """
     SELECT 
@@ -53,32 +52,21 @@ def main():
     """
 
     result = spark.sql(sql_query)
-    query_time = time.time() - start_query
-    result.show()
-    logger.info(f"Tempo esecuzione query: {query_time:.10f}s")
 
-    # Stampa piano di esecuzione e DAG
-    logger.info("=== Piano di esecuzione (logical & physical) ===")
-    result.explain(extended=True)
+    final_time = time.time() - start_time
 
     # 3) Scrittura risultati
-    start_write = time.time()
     (result
      .coalesce(1)  # Vogliamo un unico CSV
      .write
      .mode("overwrite")
      .option("header", True)
      .csv(HDFS_BASE_RESULT_PATH_Q1_SQL))
-    write_time = time.time() - start_write
-    logger.info(f"Tempo scrittura risultati: {write_time:.10f}s")
 
-    total = read_time + query_time + write_time
-    logger.info(f"Tempi: \nTempo di lettura: {read_time}\nTempo di query: {query_time}\nTempo di write: {write_time}")
-    logger.info(f"Tempo totale (read+query+write): {total:.10f}s")
-
-    save_execution_time(QUERY_1_SQL, read_time, query_time, write_time, total)
+    save_execution_time(QUERY_1_SQL, workers_number, final_time)
     spark.stop()
 
 
 if __name__ == "__main__":
-    main()
+    workers_number = int(sys.argv[1])
+    main(workers_number)
