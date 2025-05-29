@@ -5,6 +5,8 @@ from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1_RDD, QUERY_1_RDD
 from commonFunction import save_execution_time, create_spark_session
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType
 
+from queries.commonFunction import write_rdd_hdfs
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -26,16 +28,14 @@ def extract_year_and_transform(row):
 
 
 def main(workers_number: int):
-    spark = create_spark_session("Q1 Energy Stats RDD Optimized")
+    spark = create_spark_session("Q1 Energy Stats RDD", "RDD", workers_number)
 
     start_time = time.time()
 
-    # 1) Lettura + trasformazione + filtro
     rdd = (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).rdd
            .map(extract_year_and_transform)
            .filter(lambda x: x is not None))
 
-    # 2) Aggregazione ottimizzata - usa solo i valori necessari
     def seq_op(acc, val):
         """Operazione sequenziale ottimizzata"""
         if acc is None:
@@ -86,16 +86,10 @@ def main(workers_number: int):
 
     final_time = time.time() - start_time
 
-    # 6) Scrittura ottimizzata - evita union costosa
-    def format_row(row):
-        return ",".join(str(x) for x in row)
-
     header = ("Country,record_year,avg_carbon_intensity,min_carbon_intensity,max_carbon_intensity,avg_cfe_percentage,"
               "min_cfe_percentage,max_cfe_percentage")
 
-    # Scrivi header separatamente poi append i dati
-    spark.sparkContext.parallelize([header], 1).saveAsTextFile(HDFS_BASE_RESULT_PATH_Q1_RDD + "_header")
-    result_rdd.map(format_row).coalesce(1).saveAsTextFile(HDFS_BASE_RESULT_PATH_Q1_RDD + "_data")
+    write_rdd_hdfs(spark, header, result_rdd, HDFS_BASE_RESULT_PATH_Q1_RDD)
 
     save_execution_time(QUERY_1_RDD, workers_number, final_time)
     spark.stop()

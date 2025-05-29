@@ -27,7 +27,7 @@ schema = StructType([
 # energy percentage (CFE%)".
 
 def main(workers_number: int):
-    spark = create_spark_session("Q3 SQL Energy Stats")
+    spark = create_spark_session("Q3 SQL Energy Stats", "DF", workers_number)
 
     # 1) Lettura dati Parquet
     start_read = time.time()
@@ -36,7 +36,7 @@ def main(workers_number: int):
                                                                                     "yyyy-MM-dd HH:mm:ss")).withColumn(
         "record_hour", F.hour("event_time")).createOrReplaceTempView("energy_data"))
 
-    # Query SQL migliorata che usa la vista temporanea
+    # Query SQL
     sql = """
     WITH hourly AS (
       SELECT

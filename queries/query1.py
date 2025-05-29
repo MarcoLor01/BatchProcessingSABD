@@ -24,7 +24,7 @@ schema = StructType([
 
 
 def main(workers_number: int):
-    spark = create_spark_session("Q1 Energy Stats")
+    spark = create_spark_session("Q1 Energy Stats", "DF", workers_number)
     # 1) Lettura dati Parquet
 
     start_time = time.time()

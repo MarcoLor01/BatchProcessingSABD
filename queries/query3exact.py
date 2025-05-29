@@ -29,7 +29,7 @@ schema = StructType([
 # energy percentage (CFE%)”.
 
 def main(workers_number: int):
-    spark = create_spark_session("Q3 Exact Energy Stats")
+    spark = create_spark_session("Q3 Exact Energy Stats", "DF", workers_number)
     # 1) Lettura dati Parquet
     start_read = time.time()
 

@@ -6,6 +6,8 @@ from pyspark.sql.types import StructType, StructField, IntegerType, StringType, 
 from commonFunction import create_spark_session, save_execution_time
 from pyspark.sql import Row
 
+from queries.commonFunction import write_rdd_hdfs
+
 # Configura il logger
 logging.basicConfig(
     level=logging.INFO,
@@ -45,7 +47,7 @@ def extract_year_month_and_transform(row):
 
 
 def main(workers_number: int):
-    spark = create_spark_session("Q2 Energy Stats RDD Optimized")
+    spark = create_spark_session("Q2 Energy Stats RDD", "RDD", workers_number)
 
     start_time = time.time()
 
@@ -97,29 +99,17 @@ def main(workers_number: int):
 
     final_time = time.time() - start_time
 
-    # Combinazione dei risultati
     all_results_rdd = (rdd_top_5_carbonDirect
                        .union(rdd_bottom_5_carbonDirect)
                        .union(rdd_top_5_fce)
                        .union(rdd_bottom_5_fce))
-    # 2) Definisci l’header CSV
+
     header = (
         "record_year,record_month,avg_carbon_intensity,avg_cfe_percentage"
     )
 
-    # 3) Trasforma le tuple in linee CSV
-    csv_rdd = all_results_rdd.map(lambda row: ",".join(map(str, row)))
+    write_rdd_hdfs(spark, header, all_results_rdd, HDFS_BASE_RESULT_PATH_Q2_RDD)
 
-    # 4) Prepara l'RDD finale con header + dati, coalesciando in 1 partizione
-    final_rdd = (
-        spark.sparkContext
-        .parallelize([header])
-        .union(csv_rdd)
-        .coalesce(1)
-    )
-
-    # 5) Scrivi su HDFS
-    final_rdd.saveAsTextFile(HDFS_BASE_RESULT_PATH_Q2_RDD)
     save_execution_time(QUERY_2_RDD, workers_number, final_time)
 
     spark.stop()

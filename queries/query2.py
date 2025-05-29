@@ -30,7 +30,7 @@ schema = StructType([
 # In totale sono attesi 20 valori.
 
 def main(workers_number: int):
-    spark = create_spark_session("Q2 Energy Stats")
+    spark = create_spark_session("Q2 Energy Stats", "DF", workers_number)
 
     # 1) Lettura dati Parquet
     start_time = time.time()
@@ -67,7 +67,7 @@ def main(workers_number: int):
      .csv(HDFS_BASE_RESULT_PATH_Q2 + "rankings"))
 
     # === CSV 2: SERIE TEMPORALE COMPLETA (per grafici) ===
-    # Ordinare per timestamp per avere una serie temporale cronologica
+
     result_timeseries = result.orderBy("month_timestamp")
 
     # Scrittura CSV 2 - Serie temporale

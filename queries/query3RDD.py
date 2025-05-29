@@ -3,7 +3,7 @@ import time
 import logging
 from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q3_RDD, QUERY_3_RDD
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
-from commonFunction import create_spark_session, save_execution_time
+from commonFunction import create_spark_session, save_execution_time, write_rdd_hdfs, format_row_6_decimals
 
 # Configura il logger
 logging.basicConfig(
@@ -69,7 +69,7 @@ def extract_hour_and_transform(row):
 
 
 def main(workers_number: int):
-    spark = create_spark_session("Q3 Energy Stats RDD")
+    spark = create_spark_session("Q3 Energy Stats RDD", "RDD", workers_number)
 
     # 1) Lettura dati Parquet e trasformazione diretta
     start_read = time.time()
@@ -125,24 +125,8 @@ def main(workers_number: int):
 
     final_time = time.time() - start_read
 
-    # 6) Definisci l'header CSV
     header = "country,data,min,25-perc,50-perc,75-perc,max"
-
-    # 7) Trasforma le tuple in linee CSV con formattazione a 6 decimali
-    csv_rdd = results.map(lambda row: "{},{},{:.6f},{:.6f},{:.6f},{:.6f},{:.6f}".format(
-        row[0], row[1], row[2], row[3], row[4], row[5], row[6]
-    ))
-
-    # 8) Prepara l'RDD finale con header + dati, coalesciando in 1 partizione
-    final_rdd = (
-        spark.sparkContext
-        .parallelize([header])
-        .union(csv_rdd)
-        .coalesce(1)
-    )
-
-    # 9) Scrivi su HDFS
-    final_rdd.saveAsTextFile(HDFS_BASE_RESULT_PATH_Q3_RDD)
+    write_rdd_hdfs(spark, header, results, HDFS_BASE_RESULT_PATH_Q3_RDD, format_row_6_decimals)
     save_execution_time(QUERY_3_RDD, workers_number, final_time)
     spark.stop()
 
