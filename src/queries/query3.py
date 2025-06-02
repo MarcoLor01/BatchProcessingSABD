@@ -1,10 +1,11 @@
-import logging
+# query3.py
 import sys
 import time
-from queries.commonFunction import create_spark_session, save_execution_time
+import logging
 from pyspark.sql import functions as F
-from queries.config import HDFS_PARQUET_PATH, QUERY_3_EXACT, HDFS_BASE_RESULT_PATH_Q3_EXACT
+from src.utilities.config import HDFS_PARQUET_PATH, QUERY_3, HDFS_BASE_RESULT_PATH_Q3
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
+from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
 
 # Configura il logger
 logging.basicConfig(
@@ -22,33 +23,33 @@ schema = StructType([
 ])
 
 
-# Facendo riferimento al dataset dei valori energetici dell’Italia e della Svezia, aggregare i dati di ciascun
-# paese sulle 24 ore della giornata, calcolando il valor medio di “Carbon intensity gCO2eq/kWh
-# (direct)” e “Carbon-free energy percentage (CFE%)”. Calcolare il minimo, 25-esimo, 50-esimo, 75-
-# esimo percentile e massimo del valor medio di “Carbon intensity gCO2eq/kWh (direct)” e “Carbonfree
-# energy percentage (CFE%)”.
+# Facendo riferimento al dataset dei valori energetici dell'Italia e della Svezia, aggregare i dati di ciascun
+# paese sulle 24 ore della giornata, calcolando il valor medio di "Carbon intensity gCO2eq/kWh
+# (direct)" e "Carbon-free energy percentage (CFE%)". Calcolare il minimo, 25-esimo, 50-esimo, 75-
+# esimo percentile e massimo del valor medio di "Carbon intensity gCO2eq/kWh (direct)" e "Carbonfree
+# energy percentage (CFE%)".
 
 def main(workers_number: int):
-    spark = create_spark_session("Q3 Exact Energy Stats", "DF", workers_number)
-    # 1) Lettura dati Parquet
-    start_read = time.time()
+    spark = create_spark_session("Q3 Energy Stats", "DF", workers_number)
 
+    # ---------------- Start Misuration ----------------
+    start_time = time.time()
     df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
-    F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_hour", F.hour("event_time"))
+                                                                         F.to_timestamp("event_time",
+                                                                                        "yyyy-MM-dd HH:mm:ss")).withColumn(
+        "record_hour", F.hour("event_time"))
 
-    # 2. Calcola la media oraria per ciascun Paese
     intermediate_result = df.groupBy("Country", "record_hour").agg(
         F.avg("CarbonDirect").alias("avg_hour_carbon_intensity"),
-        F.avg("CFEpercent").alias("avg_hour_cfe_percentage"),
-        F.min("event_time").alias("hour_timestamp")
+        F.avg("CFEpercent").alias("avg_hour_cfe_percentage")
     )
 
     carbon_stats = intermediate_result.groupBy("Country").agg(
         F.min("avg_hour_carbon_intensity").alias("carbon_min"),
-        F.expr("percentile(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75))").alias("carbon_quartiles"),  # Corretto
+        F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75), 100)").alias("carbon_quartiles"),
         F.max("avg_hour_carbon_intensity").alias("carbon_max"),
         F.min("avg_hour_cfe_percentage").alias("cfe_min"),
-        F.expr("percentile(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75))").alias("cfe_quartiles"),
+        F.expr("percentile_approx(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75), 100)").alias("cfe_quartiles"),
         F.max("avg_hour_cfe_percentage").alias("cfe_max")
     )
 
@@ -73,29 +74,21 @@ def main(workers_number: int):
         F.col("cfe_max").alias("max")
     )
 
+    # Unione dei risultati finali
     final_result = carbon_result.unionByName(cfe_result)
-    total_time = time.time() - start_read
-    # 4. Unione dei risultati finali e scrittura
 
-    # === CSV 1: STATISTICHE DESCRITTIVE ===
+    final_result.count()
+    total_time = time.time() - start_time
+    # ---------------- End Misuration ----------------
+
     (final_result
      .coalesce(1)
      .write
      .mode("overwrite")
      .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "stats"))
+     .csv(HDFS_BASE_RESULT_PATH_Q3))
 
-    # === CSV 2: ANDAMENTO ORARIO (per grafici Grafana) ===
-    (intermediate_result
-     .orderBy("Country", "record_hour")
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "hourly"))
-
-    save_execution_time(QUERY_3_EXACT, workers_number, total_time)
-
+    save_execution_time(QUERY_3, workers_number, total_time)
     spark.stop()
 
 

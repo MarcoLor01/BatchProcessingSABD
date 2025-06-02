@@ -1,7 +1,7 @@
 HDFS_BASE_PATH = "hdfs://namenode:9000/electricity_data"
-COUNTRIES = ["IT", "SE"]
-YEARS = ["2021", "2022", "2023", "2024"]
 HDFS_PARQUET_PATH = "hdfs://namenode:9000/electricity_data_parquet"
+HDFS_CSV_PATH_ITA = "hdfs://namenode:9000/electricity_data_csv/"
+HDFS_CSV_PATH_SWE = "hdfs://namenode:9000/electricity_data_csv/"
 HDFS_BASE_RESULT_PATH_Q1 = "hdfs://namenode:9000/result/query1/"
 HDFS_BASE_RESULT_PATH_Q2 = "hdfs://namenode:9000/result/query2/"
 HDFS_BASE_RESULT_PATH_Q3 = "hdfs://namenode:9000/result/query3/"
@@ -12,7 +12,6 @@ HDFS_BASE_RESULT_PATH_Q3_SQL = "hdfs://namenode:9000/result/query3sql/"
 HDFS_BASE_RESULT_PATH_Q1_RDD = "hdfs://namenode:9000/result/query1rdd/"
 HDFS_BASE_RESULT_PATH_Q2_RDD = "hdfs://namenode:9000/result/query2rdd/"
 HDFS_BASE_RESULT_PATH_Q3_RDD = "hdfs://namenode:9000/result/query3rdd/"
-
 HDFS_CSV_TOTAL_PATH = "hdfs://namenode:9000/electricity_data_csv_total"
 QUERY_1 = 1
 QUERY_2 = 2
@@ -24,3 +23,8 @@ QUERY_3_SQL = 7
 QUERY_1_RDD = 8
 QUERY_2_RDD = 9
 QUERY_3_RDD = 10
+
+SCHEMA_QUERY_1_RDD = ["Country", "record_year", "avg_carbon_intensity", "min_carbon_intensity",
+                "max_carbon_intensity", "avg_cfe_percentage", "min_cfe_percentage", "max_cfe_percentage"]
+SCHEMA_QUERY_2_RDD = ["record_year,record_month,avg_carbon_intensity,avg_cfe_percentage"]
+SCHEMA_QUERY_3_RDD = ["country,data,min,25-perc,50-perc,75-perc,max"]

@@ -1,8 +1,8 @@
 import logging
 import sys
 import time
-from queries.commonFunction import create_spark_session, save_execution_time
-from queries.config import HDFS_PARQUET_PATH, QUERY_3_SQL, HDFS_BASE_RESULT_PATH_Q3_SQL
+from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
+from src.utilities.config import HDFS_PARQUET_PATH, QUERY_3_SQL, HDFS_BASE_RESULT_PATH_Q3_SQL
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from pyspark.sql import functions as F
 
@@ -29,7 +29,7 @@ schema = StructType([
 def main(workers_number: int):
     spark = create_spark_session("Q3 SQL Energy Stats", "DF", workers_number)
 
-    # 1) Lettura dati Parquet
+    # ---------------- Start Misuration ----------------
     start_read = time.time()
     (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
                                                                      F.to_timestamp("event_time",
@@ -78,8 +78,9 @@ def main(workers_number: int):
     """
 
     result = spark.sql(sql)
-
+    result.count()
     final_time = time.time() - start_read
+    # ---------------- End Misuration ----------------
 
     (result
      .coalesce(1)

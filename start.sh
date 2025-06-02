@@ -5,7 +5,7 @@ NIFI_PORT=8080
 HDFS_INTERVAL=10
 NIFI_INTERVAL=60
 NIFI_API_BASE_URL="http://${NIFI_HOST}:${NIFI_PORT}/nifi-api"
-NUM_RUNS=3
+NUM_RUNS=10
 TARGET="./benchmark"
 
 install_package() {
@@ -174,4 +174,4 @@ for WORKERS in 1 2 3; do
 
 done
 
-echo "Script completato con successo!"
+echo "Script completato"

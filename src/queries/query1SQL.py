@@ -1,9 +1,9 @@
 import sys
 import time
 import logging
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1_SQL, QUERY_1_SQL
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1_SQL, QUERY_1_SQL
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
-from queries.commonFunction import save_execution_time, create_spark_session
+from src.utilities.commonQueryFunction import save_execution_time, create_spark_session
 from pyspark.sql import functions as F
 
 # Configura il logger
@@ -25,7 +25,7 @@ schema = StructType([
 def main(workers_number: int):
     spark = create_spark_session("Q1 Energy Stats SQL", "DF", workers_number)
 
-    # 1) Lettura dati Parquet
+    # ---------------- Start Misuration ----------------
     start_time = time.time()
 
     (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
@@ -52,8 +52,10 @@ def main(workers_number: int):
     """
 
     result = spark.sql(sql_query)
-
+    result.count()
     final_time = time.time() - start_time
+    # ---------------- End Misuration ----------------
+
 
     # 3) Scrittura risultati
     (result

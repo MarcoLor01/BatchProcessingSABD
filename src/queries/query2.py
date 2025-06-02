@@ -3,9 +3,9 @@ import sys
 import time
 import logging
 from pyspark.sql import functions as F
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2, QUERY_2
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2, QUERY_2
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
-from commonFunction import create_spark_session, save_execution_time
+from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
 
 # Configura il logger
 logging.basicConfig(
@@ -32,31 +32,30 @@ schema = StructType([
 def main(workers_number: int):
     spark = create_spark_session("Q2 Energy Stats", "DF", workers_number)
 
-    # 1) Lettura dati Parquet
+    # ---------------- Start Misuration ----------------
     start_time = time.time()
     df = (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'IT').withColumn("event_time",
     F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
     .withColumn("record_month", F.month("event_time")))
 
-    # Aggregazione base
     result = (df.groupBy("record_year", "record_month").agg(
         F.avg("CarbonDirect").alias("avg_carbon_intensity"),
         F.avg("CFEpercent").alias("avg_cfe_percentage"),
         F.min("event_time").alias("month_timestamp")
     ).cache())
 
+    result.count()
+
     # === CSV 1: CLASSIFICHE (20 valori) ===
     result_carbon_desc = result.orderBy(F.col("avg_carbon_intensity").desc()).limit(5)
     result_carbon_asc = result.orderBy(F.col("avg_carbon_intensity").asc()).limit(5)
     cfe_percentage_desc = result.orderBy(F.col("avg_cfe_percentage").desc()).limit(5)
     cfe_percentage_asc = result.orderBy(F.col("avg_cfe_percentage").asc()).limit(5)
-
-
-
-    final_time = time.time() - start_time
-
-    # Union per le classifiche
     all_rankings = result_carbon_desc.union(result_carbon_asc).union(cfe_percentage_desc).union(cfe_percentage_asc)
+
+    all_rankings.count()
+    final_time = time.time() - start_time
+    # ---------------- End Misuration ----------------
 
     # Scrittura CSV 1 - Classifiche
     (all_rankings
@@ -66,7 +65,7 @@ def main(workers_number: int):
      .option("header", True)
      .csv(HDFS_BASE_RESULT_PATH_Q2 + "rankings"))
 
-    # === CSV 2: SERIE TEMPORALE COMPLETA (per grafici) ===
+    # === CSV 2: SERIE TEMPORALE COMPLETA (per grafico) ===
 
     result_timeseries = result.orderBy("month_timestamp")
 

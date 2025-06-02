@@ -3,9 +3,9 @@ import sys
 import time
 import logging
 from pyspark.sql import functions as F
-from config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1, QUERY_1
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q1, QUERY_1
 from pyspark.sql.types import StructType, StructField, StringType, TimestampType, DoubleType
-from queries.commonFunction import save_execution_time, create_spark_session
+from src.utilities.commonQueryFunction import save_execution_time, create_spark_session
 
 # Configura il logger
 logging.basicConfig(
@@ -25,8 +25,8 @@ schema = StructType([
 
 def main(workers_number: int):
     spark = create_spark_session("Q1 Energy Stats", "DF", workers_number)
-    # 1) Lettura dati Parquet
 
+    # ---------------- Start Misuration ----------------
     start_time = time.time()
 
     df = (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
@@ -44,7 +44,10 @@ def main(workers_number: int):
         F.max("CFEpercent").alias("max_cfe_percentage"),
     ).orderBy("Country", "record_year"))  # Wide, necessario per riordinamento
 
+    result.count()
     final_time = time.time() - start_time
+    # ---------------- End Misuration ----------------
+
 
     # 3) Scrittura risultati
     (result
