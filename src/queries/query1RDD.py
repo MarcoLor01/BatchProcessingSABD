@@ -3,23 +3,19 @@ import time
 import logging
 from src.utilities.config import HDFS_BASE_RESULT_PATH_Q1_RDD, QUERY_1_RDD, HDFS_CSV_PATH_SWE, HDFS_CSV_PATH_ITA, \
     SCHEMA_QUERY_1_RDD
-from src.utilities.commonQueryFunction import save_execution_time, create_spark_session
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType
-
-from src.utilities.commonQueryFunction import write_rdd_hdfs
+from src.utilities.commonQueryFunction import save_execution_time, create_spark_session, write_rdd_hdfs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-HEADER = [] #TODO: DA DEFINIRE
 
 def extract_year_and_transform(line):
     fields = line.split(",")
-    date_part = fields[0].split("-")
+    country = fields[0]
+    date_part = fields[1].split("-")
     year = int(date_part[0])
-    country = fields[1]
-    carbonDirect = float(fields[4])
-    CFEpercent = float(fields[6])
+    carbonDirect = float(fields[2])
+    CFEpercent = float(fields[3])
     return (country, year), (carbonDirect, CFEpercent)
 
 
@@ -30,13 +26,9 @@ def main(workers_number: int):
     start_time = time.time()
 
     # Preparazione dati
-    rdd_italy = spark.sparkContext.textFile(HDFS_CSV_PATH_ITA)
-    rdd_swe = spark.SparkContext.textFile(HDFS_CSV_PATH_SWE)
-    rdd = rdd_italy.union(rdd_swe)
-
-    # Filtraggio
-    rdd = (rdd.filter(lambda line: not line.startswith(HEADER))
-           .map(extract_year_and_transform))
+    rdd_italy = spark.sparkContext.textFile(HDFS_CSV_PATH_ITA).zipWithIndex().filter(lambda x: x[1] != 0).map(lambda x: x[0])
+    rdd_swe = spark.sparkContext.textFile(HDFS_CSV_PATH_SWE).zipWithIndex().filter(lambda x: x[1] != 0).map(lambda x: x[0])
+    rdd = rdd_italy.union(rdd_swe).map(extract_year_and_transform)
 
     def seq_op(acc, val):
         carbon, cfe = val

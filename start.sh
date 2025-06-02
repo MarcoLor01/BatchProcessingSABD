@@ -58,6 +58,7 @@ start_root_pg() {
 
 stop_root_pg() {
   echo "Arresto del Process Group Root..."
+  sleep 10
   # Recupera il JSON del flow per ottenere l’ID del Process Group Root
   ROOT_PG_JSON=$(curl -sf "${NIFI_API_BASE_URL}/flow/process-groups/root")
   ROOT_PG_ID=$(echo "$ROOT_PG_JSON" | jq -r '.processGroupFlow.id')
@@ -100,18 +101,19 @@ for WORKERS in 1 2 3; do
 
   echo "1. Avvio dei servizi Docker Compose con ${WORKERS} worker..."
 
-  docker-compose down
-  docker-compose up --build -d --scale spark-worker=$WORKERS
+  #docker-compose down
+  #docker-compose up --build -d --scale spark-worker=$WORKERS
 
   if [ $? -ne 0 ]; then
     echo "Errore durante l'avvio di Docker Compose."
     exit 1
   fi
 
-  docker exec namenode hdfs dfs -rm -r /electricity_data_parquet/*
-
   echo "2. Attesa che NiFi sia disponibile..."
   wait_for_nifi
+
+  docker exec namenode hdfs dfs -rm -r /electricity_data_parquet/*
+  docker exec namenode hdfs dfs -rm -r /electricity_data_csv/*
 
   echo "3. Avvio del flusso Root in NiFi..."
   start_root_pg
@@ -120,7 +122,7 @@ for WORKERS in 1 2 3; do
   wait_for_hdfs_data
 
   echo "3. Stop del flusso Root in NiFi..."
-  stop_root_pg
+  stop_root_pg &
 
   for run in $(seq 1 $NUM_RUNS); do
     echo "=== Run #$run con ${WORKERS} worker(s) ==="
@@ -138,37 +140,42 @@ for WORKERS in 1 2 3; do
     docker exec namenode hdfs dfs -rm -r /result/query3exact/*
     echo "Completato, inizio esecuzioni query"
 
-    echo "Esecuzione query1.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query1.py $WORKERS || exit 1
-
-    echo "Esecuzione query1SQL.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query1SQL.py $WORKERS || exit 1
+    echo "Esecuzione query2SQL.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py $WORKERS || exit 1
 
     echo "Esecuzione query1RDD.py..."
-    docker exec -it namenode hdfs dfs -rm -r /result/query1rdd
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query1RDD.py $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1RDD.py $WORKERS || exit 1
 
     echo "Esecuzione query2RDD.py..."
-    docker exec -it namenode hdfs dfs -rm -r /result/query2rdd
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query2RDD.py $WORKERS || exit 1
-
-    echo "Esecuzione query2.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query2.py $WORKERS || exit 1
-
-    echo "Esecuzione query2SQL.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query2SQL.py $WORKERS || exit 1
-
-    echo "Esecuzione query3.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query3.py $WORKERS || exit 1
-
-    echo "Esecuzione query3exact.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query3exact.py $WORKERS || exit 1
-
-    echo "Esecuzione query3SQL.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query3SQL.py $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2RDD.py $WORKERS || exit 1
 
     echo "Esecuzione query3RDD.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client ./queries/query3RDD.py $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3RDD.py $WORKERS || exit 1
+
+    echo "Esecuzione query1.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py $WORKERS || exit 1
+
+    echo "Esecuzione query1SQL.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py $WORKERS || exit 1
+
+
+
+
+
+    echo "Esecuzione query2.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py $WORKERS || exit 1
+
+
+    echo "Esecuzione query3.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py $WORKERS || exit 1
+
+    echo "Esecuzione query3exact.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py $WORKERS || exit 1
+
+    echo "Esecuzione query3SQL.py..."
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py $WORKERS || exit 1
+
+
   done
 
 

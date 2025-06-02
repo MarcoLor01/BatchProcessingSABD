@@ -87,7 +87,7 @@ services:
       timeout: 3s
       retries: 3
     volumes:
-      - ./queries:/opt/spark/queries
+      - ./src/:/opt/spark/src/
       - spark-logs:/opt/spark/spark-events
       - ./hadoop_conf:/opt/hadoop/etc/hadoop
       - ./benchmark:/app/benchmark
@@ -110,7 +110,7 @@ services:
       - SPARK_WORKER_MEMORY=1g
       - SPARK_WORKER_CORES=1
     volumes:
-      - ./queries:/opt/spark/queries
+      - ./src/:/opt/spark/src/
       - spark-logs:/opt/spark/spark-events
       - ./hadoop_conf:/opt/hadoop/etc/hadoop
     networks:

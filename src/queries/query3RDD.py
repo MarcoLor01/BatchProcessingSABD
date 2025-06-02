@@ -3,8 +3,7 @@ import time
 import logging
 from src.utilities.config import HDFS_BASE_RESULT_PATH_Q3_RDD, QUERY_3_RDD, HDFS_CSV_PATH_SWE, HDFS_CSV_PATH_ITA, \
     SCHEMA_QUERY_3_RDD
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
-from src.utilities.commonQueryFunction import create_spark_session, save_execution_time, write_rdd_hdfs, format_row_6_decimals
+from src.utilities.commonQueryFunction import create_spark_session, save_execution_time, write_rdd_hdfs
 
 # Configura il logger
 logging.basicConfig(
@@ -14,7 +13,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-HEADER = [] #TODO: DA DEFINIRE
 
 def calculate_percentile(sorted_data, p):
     n = len(sorted_data)
@@ -44,13 +42,15 @@ def calculate_stats(values):
         sorted_values[-1]  # max
     )
 
+
 def extract_hour_and_transform(line):
     fields = line.split(",")
-    date_part = fields[0].split("-")
-    hour = int(date_part[4])
-    country = fields[1]
-    carbonDirect = float(fields[4])
-    CFEpercent = float(fields[6])
+    datetime_str = fields[1].replace("-", " ").replace(":", " ")
+    parts = datetime_str.split()  # ["2021", "01", "01", "00", "00", "00"]
+    hour = int(parts[3])
+    country = fields[0]
+    carbonDirect = float(fields[2])
+    CFEpercent = float(fields[3])
     return (country, hour), (carbonDirect, CFEpercent, 1)
 
 
@@ -60,38 +60,37 @@ def main(workers_number: int):
     # ---------------- Start Misuration ----------------
     start_read = time.time()
 
-    rdd_italy = spark.sparkContext.textFile(HDFS_CSV_PATH_ITA)
-    rdd_swe = spark.SparkContext.textFile(HDFS_CSV_PATH_SWE)
-    rdd = rdd_italy.union(rdd_swe)
-
-    base_rdd = (rdd.filter(lambda line: not line.startswith(HEADER))
-           .map(extract_hour_and_transform))
+    rdd_italy = spark.sparkContext.textFile(HDFS_CSV_PATH_ITA).zipWithIndex().filter(lambda x: x[1] != 0).map(
+        lambda x: x[0])
+    rdd_swe = spark.sparkContext.textFile(HDFS_CSV_PATH_SWE).zipWithIndex().filter(lambda x: x[1] != 0).map(
+        lambda x: x[0])
+    base_rdd = rdd_italy.union(rdd_swe).map(extract_hour_and_transform)
 
     hourly_agg = base_rdd.reduceByKey(
-    lambda a, b: (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+        lambda a, b: (a[0] + b[0], a[1] + b[1], a[2] + b[2])
     )
 
     country_stats = (
-    hourly_agg
-    .map(lambda kv: (kv[0][0], (kv[1][0] / kv[1][2], kv[1][1] / kv[1][2])))
-    .groupByKey()
-    .mapValues(lambda values: (
-        calculate_stats([v[0] for v in values]),  # Stats per carbon
-        calculate_stats([v[1] for v in values])   # Stats per CFE
-    ))
+        hourly_agg
+        .map(lambda kv: (kv[0][0], (kv[1][0] / kv[1][2], kv[1][1] / kv[1][2])))
+        .groupByKey()
+        .mapValues(lambda values: (
+            calculate_stats([v[0] for v in values]),  # Stats per carbon
+            calculate_stats([v[1] for v in values])  # Stats per CFE
+        ))
     )
 
     # Trasforma in formato finale
     results = country_stats.flatMap(lambda rec: [
-        (rec[0], 'carbon-intensity', *rec[1]),
-        (rec[0], 'cfe', *rec[2])
+        (rec[0], 'carbon-intensity', *rec[1][0]),  # carbon stats
+        (rec[0], 'cfe', *rec[1][1])  # cfe stats
     ])
 
     results.count()
     final_time = time.time() - start_read
     # ---------------- End Misuration ----------------
 
-    write_rdd_hdfs(results,HDFS_BASE_RESULT_PATH_Q3_RDD,SCHEMA_QUERY_3_RDD)
+    write_rdd_hdfs(results, HDFS_BASE_RESULT_PATH_Q3_RDD, SCHEMA_QUERY_3_RDD)
     save_execution_time(QUERY_3_RDD, workers_number, final_time)
     spark.stop()
 

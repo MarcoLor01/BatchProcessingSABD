@@ -55,15 +55,13 @@ def main(workers_number: int):
     agg_result.createOrReplaceTempView("agg_cached")
 
     final_sql = """
-    SELECT * FROM (
-      SELECT *, 'carbon_desc' as type FROM agg_cached ORDER BY avg_carbon_intensity DESC LIMIT 5
-      UNION ALL
-      SELECT *, 'carbon_asc' as type FROM agg_cached ORDER BY avg_carbon_intensity ASC LIMIT 5
-      UNION ALL  
-      SELECT *, 'cfe_desc' as type FROM agg_cached ORDER BY avg_cfe_percentage DESC LIMIT 5
-      UNION ALL
-      SELECT *, 'cfe_asc' as type FROM agg_cached ORDER BY avg_cfe_percentage ASC LIMIT 5
-    )
+    SELECT *, 'carbon_desc' as type FROM agg_cached ORDER BY avg_carbon_intensity DESC LIMIT 5
+    UNION ALL
+    SELECT *, 'carbon_asc' as type FROM agg_cached ORDER BY avg_carbon_intensity ASC LIMIT 5
+    UNION ALL  
+    SELECT *, 'cfe_desc' as type FROM agg_cached ORDER BY avg_cfe_percentage DESC LIMIT 5
+    UNION ALL
+    SELECT *, 'cfe_asc' as type FROM agg_cached ORDER BY avg_cfe_percentage ASC LIMIT 5
     """
 
     result = spark.sql(final_sql)
