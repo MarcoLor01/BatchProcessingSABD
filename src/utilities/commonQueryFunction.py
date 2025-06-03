@@ -4,6 +4,7 @@ from pyspark.sql import SparkSession
 
 RESULTS_CSV = "/app/benchmark/execution_time.csv"
 
+
 def save_execution_time(query_number, workers_number, tempo_totale,
                         filename=RESULTS_CSV):
     print("Scrivo dati su CSV")

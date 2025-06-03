@@ -1,1 +1,3 @@
 Gestire caricamento del Process Group su NiFi automatico
+Sistemare output Query 2, suddividere su 4 file .csv, nel secondo
+c'è il timestamp su DF, in SQL c'è il type.

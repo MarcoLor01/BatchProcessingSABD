@@ -25,7 +25,7 @@ schema = StructType([
 def main(workers_number: int):
     spark = SparkSession.builder.appName("Q2 Energy Stats SQL").getOrCreate()
 
-     # ---------------- Start Misuration ----------------
+    # ---------------- Start Misuration ----------------
     start_time = time.time()
 
     (spark.read.schema(schema)
@@ -54,27 +54,67 @@ def main(workers_number: int):
     agg_result.count()
     agg_result.createOrReplaceTempView("agg_cached")
 
-    final_sql = """
-    SELECT *, 'carbon_desc' as type FROM agg_cached ORDER BY avg_carbon_intensity DESC LIMIT 5
-    UNION ALL
-    SELECT *, 'carbon_asc' as type FROM agg_cached ORDER BY avg_carbon_intensity ASC LIMIT 5
-    UNION ALL  
-    SELECT *, 'cfe_desc' as type FROM agg_cached ORDER BY avg_cfe_percentage DESC LIMIT 5
-    UNION ALL
-    SELECT *, 'cfe_asc' as type FROM agg_cached ORDER BY avg_cfe_percentage ASC LIMIT 5
+    # 1) Query SQL per i top 5 avg_carbon_intensity (descendente)
+    carbon_desc_sql = """
+    SELECT *
+    FROM (
+      SELECT *
+      FROM agg_cached
+      ORDER BY avg_carbon_intensity DESC
+      LIMIT 5
+    )
     """
 
-    result = spark.sql(final_sql)
-    result.count()
-    final_time = time.time() - start_time
-     # ---------------- End Misuration ----------------
+    # 2) Query SQL per i bottom 5 avg_carbon_intensity (ascendente)
+    carbon_asc_sql = """
+    SELECT *
+    FROM (
+      SELECT *
+      FROM agg_cached
+      ORDER BY avg_carbon_intensity ASC
+      LIMIT 5
+    )
+    """
 
-    (result
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q2_SQL))
+    # 3) Query SQL per i top 5 avg_cfe_percentage (descendente)
+    cfe_desc_sql = """
+    SELECT *
+    FROM (
+      SELECT *
+      FROM agg_cached
+      ORDER BY avg_cfe_percentage DESC
+      LIMIT 5
+    )
+    """
+
+    # 4) Query SQL per i bottom 5 avg_cfe_percentage (ascendente)
+    cfe_asc_sql = """
+    SELECT *
+    FROM (
+      SELECT *
+      FROM agg_cached
+      ORDER BY avg_cfe_percentage ASC
+      LIMIT 5
+    )
+    """
+
+    df_carbon_desc = spark.sql(carbon_desc_sql)
+    df_carbon_asc = spark.sql(carbon_asc_sql)
+    df_cfe_desc = spark.sql(cfe_desc_sql)
+    df_cfe_asc = spark.sql(cfe_asc_sql)
+
+    df_carbon_desc.count()
+    df_carbon_asc.count()
+    df_cfe_desc.count()
+    df_cfe_asc.count()
+
+    final_time = time.time() - start_time
+    # ---------------- End Misuration ----------------
+
+    df_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "carbonDirectDesc")
+    df_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "carbonDirectAsc")
+    df_cfe_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "cfeDesc")
+    df_cfe_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "cfeAsc")
 
     save_execution_time(QUERY_2_SQL, workers_number, final_time)
     spark.stop()

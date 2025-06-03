@@ -49,18 +49,44 @@ def main(workers_number: int):
 
     result_rdd.count()
 
-    all_results = (result_rdd.takeOrdered(5, lambda x: x[1]) +
-                   result_rdd.top(5, lambda x: x[1]) +
-                   result_rdd.takeOrdered(5, lambda x: x[2]) +
-                   result_rdd.top(5, lambda x: x[2]))
+    carbonDirectTopList = result_rdd.top(5, key=lambda x: x[1])
+    carbonDirectBottomList = result_rdd.takeOrdered(5, key=lambda x: x[1])
+    cfeTopList = result_rdd.top(5, key=lambda x: x[2])
+    cfeBottomList = result_rdd.takeOrdered(5, key=lambda x: x[2])
 
-    flattened_results = [(item[0][0], item[0][1], item[1], item[2]) for item in all_results]
-    all_results_rdd = spark.sparkContext.parallelize(flattened_results)
-    all_results_rdd.count()
+    carbonDirectTopRdd = spark.sparkContext.parallelize([
+        (item[0][0], item[0][1], item[1], item[2])
+        for item in carbonDirectTopList
+    ])
+
+    carbonDirectBottomRdd = spark.sparkContext.parallelize([
+        (item[0][0], item[0][1], item[1], item[2])
+        for item in carbonDirectBottomList
+    ])
+
+    cfeTopRdd = spark.sparkContext.parallelize([
+        (item[0][0], item[0][1], item[1], item[2])
+        for item in cfeTopList
+    ])
+
+    cfeBottomRdd = spark.sparkContext.parallelize([
+        (item[0][0], item[0][1], item[1], item[2])
+        for item in cfeBottomList
+    ])
+
+    carbonDirectTopRdd.count()
+    carbonDirectBottomRdd.count()
+    cfeTopRdd.count()
+    cfeBottomRdd.count()
+
     final_time = time.time() - start_time
     # ---------------- End Misuration ----------------
 
-    write_rdd_hdfs(all_results_rdd, HDFS_BASE_RESULT_PATH_Q2_RDD, SCHEMA_QUERY_2_RDD)
+    write_rdd_hdfs(carbonDirectTopRdd, HDFS_BASE_RESULT_PATH_Q2_RDD + "CarbonDirectTop", SCHEMA_QUERY_2_RDD)
+    write_rdd_hdfs(carbonDirectBottomRdd, HDFS_BASE_RESULT_PATH_Q2_RDD + "CarbonDirectBottom", SCHEMA_QUERY_2_RDD)
+    write_rdd_hdfs(cfeTopRdd, HDFS_BASE_RESULT_PATH_Q2_RDD + "CfeTop", SCHEMA_QUERY_2_RDD)
+    write_rdd_hdfs(cfeBottomRdd, HDFS_BASE_RESULT_PATH_Q2_RDD + "CfeBottom", SCHEMA_QUERY_2_RDD)
+
     save_execution_time(QUERY_2_RDD, workers_number, final_time)
 
     spark.stop()

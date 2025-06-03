@@ -5,8 +5,9 @@ NIFI_PORT=8080
 HDFS_INTERVAL=10
 NIFI_INTERVAL=60
 NIFI_API_BASE_URL="http://${NIFI_HOST}:${NIFI_PORT}/nifi-api"
-NUM_RUNS=10
+NUM_RUNS=5
 TARGET="./benchmark"
+TO_REDIS="f93b6d9b-0196-1000-b473-35012106a485"
 
 install_package() {
   PACKAGE=$1
@@ -69,26 +70,71 @@ stop_root_pg() {
   echo "Process Group Root fermato (ID: $ROOT_PG_ID)."
 }
 
+start_to_redis_pg() {
+  echo "Avvio del Process Group TO_REDIS (ID: $TO_REDIS)..."
+  curl -X PUT -H "Content-Type: application/json" \
+       -d "{\"id\":\"${TO_REDIS}\",\"state\":\"RUNNING\"}" \
+       "${NIFI_API_BASE_URL}/flow/process-groups/${TO_REDIS}"
+  echo "Process Group TO_REDIS avviato (ID: $TO_REDIS)."
+}
+
+stop_to_redis_pg() {
+  echo "Arresto del Process Group TO_REDIS (ID: $TO_REDIS)..."
+  sleep 10
+  curl -X PUT -H "Content-Type: application/json" \
+       -d "{\"id\":\"${TO_REDIS}\",\"state\":\"STOPPED\"}" \
+       "${NIFI_API_BASE_URL}/flow/process-groups/${TO_REDIS}"
+  echo "Process Group TO_REDIS fermato (ID: $TO_REDIS)."
+}
+
 
 wait_for_hdfs_data() {
-  echo "Attendo che HDFS contenga dati nella cartella electricity_data_parquet..."
+  echo "Attendo che HDFS contenga almeno 2 file in /electricity_data_parquet..."
   MAX_RETRIES=30
   RETRIES=0
+
+  # Primo controllo: almeno 2 file in /electricity_data_parquet
   while true; do
     FILE_COUNT=$(docker exec namenode hdfs dfs -ls /electricity_data_parquet 2>/dev/null | grep -v '^Found' | wc -l)
-    if [ "$FILE_COUNT" -gt 0 ]; then
-      echo "Dati trovati in HDFS."
+    if [ "$FILE_COUNT" -ge 2 ]; then
+      echo "Trovati 2 file (o più) in /electricity_data_parquet."
       break
     fi
+
     RETRIES=$((RETRIES + 1))
     if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
-      echo "Timeout: Nessun dato trovato in HDFS dopo $((MAX_RETRIES * HDFS_INTERVAL)) secondi."
+      echo "Timeout: meno di 2 file trovati in /electricity_data_parquet dopo $((MAX_RETRIES * HDFS_INTERVAL)) secondi."
       exit 1
     fi
-    echo "Nessun dato ancora in HDFS, ritento tra ${HDFS_INTERVAL} s..."
-    sleep ${HDFS_INTERVAL}
+
+    echo "File trovati in /electricity_data_parquet: $FILE_COUNT. Ritento tra ${HDFS_INTERVAL}s..."
+    sleep "${HDFS_INTERVAL}"
   done
+
+  echo "Attendo che HDFS contenga almeno 2 file in /electricity_data_csv..."
+  RETRIES=0
+
+  # Secondo controllo: almeno 2 file in /electricity_data_csv
+  while true; do
+    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /electricity_data_csv 2>/dev/null | grep -v '^Found' | wc -l)
+    if [ "$FILE_COUNT" -ge 2 ]; then
+      echo "Trovati 2 file (o più) in /electricity_data_csv."
+      break
+    fi
+
+    RETRIES=$((RETRIES + 1))
+    if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+      echo "Timeout: meno di 2 file trovati in /electricity_data_csv dopo $((MAX_RETRIES * HDFS_INTERVAL)) secondi."
+      exit 1
+    fi
+
+    echo "File trovati in /electricity_data_csv: $FILE_COUNT. Ritento tra ${HDFS_INTERVAL}s..."
+    sleep "${HDFS_INTERVAL}"
+  done
+
+  echo "Entrambi i controlli superati: presenti almeno 2 file in /electricity_data_parquet e 2 file in /electricity_data_csv. Continuo..."
 }
+
 
 install_package jq
 
@@ -96,7 +142,7 @@ echo "Svuoto cartella risultati benchmark $TARGET …"
   find "$TARGET" -mindepth 1 -exec rm -rf {} +
   echo "Fatto."
 
-for WORKERS in 1 2 3; do
+for WORKERS in 1; do
   echo "=== ESECUZIONE CON ${WORKERS} WORKER(S) ==="
 
   echo "1. Avvio dei servizi Docker Compose con ${WORKERS} worker..."
@@ -158,13 +204,8 @@ for WORKERS in 1 2 3; do
     echo "Esecuzione query1SQL.py..."
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py $WORKERS || exit 1
 
-
-
-
-
     echo "Esecuzione query2.py..."
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py $WORKERS || exit 1
-
 
     echo "Esecuzione query3.py..."
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py $WORKERS || exit 1
@@ -175,10 +216,12 @@ for WORKERS in 1 2 3; do
     echo "Esecuzione query3SQL.py..."
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py $WORKERS || exit 1
 
+    echo "Esporto risultati da HDFS a Redis tramite NiFi..."
+    start_to_redis_pg
 
+    echo "Completato, stop del processo NiFi..."
+    stop_to_redis_pg
   done
-
-
 done
-
+docker-compose down
 echo "Script completato"

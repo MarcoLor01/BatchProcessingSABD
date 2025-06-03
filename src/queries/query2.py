@@ -51,19 +51,25 @@ def main(workers_number: int):
     result_carbon_asc = result.orderBy(F.col("avg_carbon_intensity").asc()).limit(5)
     cfe_percentage_desc = result.orderBy(F.col("avg_cfe_percentage").desc()).limit(5)
     cfe_percentage_asc = result.orderBy(F.col("avg_cfe_percentage").asc()).limit(5)
-    all_rankings = result_carbon_desc.union(result_carbon_asc).union(cfe_percentage_desc).union(cfe_percentage_asc)
 
-    all_rankings.count()
+    result_carbon_desc.count()
+    result_carbon_asc.count()
+    cfe_percentage_desc.count()
+    cfe_percentage_asc.count()
+
     final_time = time.time() - start_time
     # ---------------- End Misuration ----------------
 
     # Scrittura CSV 1 - Classifiche
-    (all_rankings
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q2 + "rankings"))
+
+    result_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+        HDFS_BASE_RESULT_PATH_Q2 + "result_carbon_desc")
+    result_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+        HDFS_BASE_RESULT_PATH_Q2 + "result_carbon_asc")
+    cfe_percentage_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+        HDFS_BASE_RESULT_PATH_Q2 + "cfe_percentage_desc")
+    cfe_percentage_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+        HDFS_BASE_RESULT_PATH_Q2 + "cfe_percentage_asc")
 
     # === CSV 2: SERIE TEMPORALE COMPLETA (per grafico) ===
 
