@@ -31,7 +31,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q2 Energy Stats RDD", "RDD", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     italy_rdd = (spark.sparkContext.textFile(HDFS_CSV_PATH_ITA).zipWithIndex()
                  .filter(lambda x: x[1] != 0)  # rimuove l'elemento con indice 0
@@ -74,12 +74,17 @@ def main(workers_number: int):
         for item in cfeBottomList
     ])
 
+    carbonDirectTopRdd.cache()
+    carbonDirectBottomRdd.cache()
+    cfeTopRdd.cache()
+    cfeBottomRdd.cache()
+
     carbonDirectTopRdd.count()
     carbonDirectBottomRdd.count()
     cfeTopRdd.count()
     cfeBottomRdd.count()
 
-    final_time = time.time() - start_time
+    final_time = time.perf_counter() - start_time
     # ---------------- End Misuration ----------------
 
     write_rdd_hdfs(carbonDirectTopRdd, HDFS_BASE_RESULT_PATH_Q2_RDD + "CarbonDirectTop", SCHEMA_QUERY_2_RDD)

@@ -30,7 +30,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q3 SQL Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_read = time.time()
+    start_read = time.perf_counter()
     (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
                                                                      F.to_timestamp("event_time",
                                                                                     "yyyy-MM-dd HH:mm:ss")).withColumn(
@@ -78,8 +78,9 @@ def main(workers_number: int):
     """
 
     result = spark.sql(sql)
+    result.cache()
     result.count()
-    final_time = time.time() - start_read
+    final_time = time.perf_counter() - start_read
     # ---------------- End Misuration ----------------
 
     (result

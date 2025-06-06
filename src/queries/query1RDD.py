@@ -23,7 +23,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q1 Energy Stats RDD", "RDD", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     # Preparazione dati
     rdd_italy = spark.sparkContext.textFile(HDFS_CSV_PATH_ITA).zipWithIndex().filter(lambda x: x[1] != 0).map(lambda x: x[0])
@@ -77,8 +77,10 @@ def main(workers_number: int):
     ))
                   )
 
+    result_rdd.cache()
     result_rdd.count()
-    final_time = time.time() - start_time
+    final_time = time.perf_counter() - start_time
+    print("Tempo finale: ", str(final_time))
     # ---------------- End Misuration ----------------
 
     write_rdd_hdfs(result_rdd,HDFS_BASE_RESULT_PATH_Q1_RDD,SCHEMA_QUERY_1_RDD)

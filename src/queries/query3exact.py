@@ -32,7 +32,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q3 Exact Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_read = time.time()
+    start_read = time.perf_counter()
 
     df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
     F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_hour", F.hour("event_time"))
@@ -76,8 +76,9 @@ def main(workers_number: int):
 
     final_result = carbon_result.unionByName(cfe_result)
 
+    final_result.cache()
     final_result.count()
-    total_time = time.time() - start_read
+    total_time = time.perf_counter() - start_read
     # ---------------- End Misuration ----------------
 
     # === CSV 1: STATISTICHE DESCRITTIVE ===

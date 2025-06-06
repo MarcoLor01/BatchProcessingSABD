@@ -33,7 +33,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q2 Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_time = time.time()
+    start_time = time.perf_counter()
     df = (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'IT').withColumn("event_time",
     F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
     .withColumn("record_month", F.month("event_time")))
@@ -51,13 +51,18 @@ def main(workers_number: int):
     result_carbon_asc = result.orderBy(F.col("avg_carbon_intensity").asc()).limit(5)
     cfe_percentage_desc = result.orderBy(F.col("avg_cfe_percentage").desc()).limit(5)
     cfe_percentage_asc = result.orderBy(F.col("avg_cfe_percentage").asc()).limit(5)
-
+    
+    result_carbon_desc.cache()
+    result_carbon_asc.cache()
+    cfe_percentage_desc.cache()
+    cfe_percentage_asc.cache()
+    
     result_carbon_desc.count()
     result_carbon_asc.count()
     cfe_percentage_desc.count()
     cfe_percentage_asc.count()
 
-    final_time = time.time() - start_time
+    final_time = time.perf_counter() - start_time
     # ---------------- End Misuration ----------------
 
     # Scrittura CSV 1 - Classifiche

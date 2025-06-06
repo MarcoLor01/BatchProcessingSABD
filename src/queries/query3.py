@@ -33,7 +33,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q3 Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_time = time.time()
+    start_time = time.perf_counter()
     df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
                                                                          F.to_timestamp("event_time",
                                                                                         "yyyy-MM-dd HH:mm:ss")).withColumn(
@@ -43,7 +43,8 @@ def main(workers_number: int):
         F.avg("CarbonDirect").alias("avg_hour_carbon_intensity"),
         F.avg("CFEpercent").alias("avg_hour_cfe_percentage")
     )
-
+    
+    time2 = time.perf_counter()	
     carbon_stats = intermediate_result.groupBy("Country").agg(
         F.min("avg_hour_carbon_intensity").alias("carbon_min"),
         F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75), 100)").alias("carbon_quartiles"),
@@ -52,7 +53,8 @@ def main(workers_number: int):
         F.expr("percentile_approx(avg_hour_cfe_percentage, array(0.25, 0.5, 0.75), 100)").alias("cfe_quartiles"),
         F.max("avg_hour_cfe_percentage").alias("cfe_max")
     )
-
+    time_fin = time.perf_counter() - time2
+    print("Tempo perc: " + str(time_fin))	
     # Reshape per il formato finale
     carbon_result = carbon_stats.select(
         F.col("Country"),
@@ -76,9 +78,10 @@ def main(workers_number: int):
 
     # Unione dei risultati finali
     final_result = carbon_result.unionByName(cfe_result)
-
+    
+    final_result.cache()
     final_result.count()
-    total_time = time.time() - start_time
+    total_time = time.perf_counter() - start_time
     # ---------------- End Misuration ----------------
 
     (final_result

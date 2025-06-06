@@ -58,7 +58,7 @@ def main(workers_number: int):
     spark = create_spark_session("Q3 Energy Stats RDD", "RDD", workers_number)
 
     # ---------------- Start Misuration ----------------
-    start_read = time.time()
+    start_read = time.perf_counter()
 
     rdd_italy = spark.sparkContext.textFile(HDFS_CSV_PATH_ITA).zipWithIndex().filter(lambda x: x[1] != 0).map(
         lambda x: x[0])
@@ -69,7 +69,8 @@ def main(workers_number: int):
     hourly_agg = base_rdd.reduceByKey(
         lambda a, b: (a[0] + b[0], a[1] + b[1], a[2] + b[2])
     )
-
+	
+    time2 = time.perf_counter()	
     country_stats = (
         hourly_agg
         .map(lambda kv: (kv[0][0], (kv[1][0] / kv[1][2], kv[1][1] / kv[1][2])))
@@ -79,15 +80,17 @@ def main(workers_number: int):
             calculate_stats([v[1] for v in values])  # Stats per CFE
         ))
     )
-
+    timefin = time.perf_counter() - time2
+    print("Tempo perc: " + str(timefin)) 
     # Trasforma in formato finale
     results = country_stats.flatMap(lambda rec: [
         (rec[0], 'carbon-intensity', *rec[1][0]),  # carbon stats
         (rec[0], 'cfe', *rec[1][1])  # cfe stats
     ])
-
+	
+    results.cache()
     results.count()
-    final_time = time.time() - start_read
+    final_time = time.perf_counter() - start_read
     # ---------------- End Misuration ----------------
 
     write_rdd_hdfs(results, HDFS_BASE_RESULT_PATH_Q3_RDD, SCHEMA_QUERY_3_RDD)

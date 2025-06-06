@@ -26,7 +26,7 @@ def main(workers_number: int):
     spark = SparkSession.builder.appName("Q2 Energy Stats SQL").getOrCreate()
 
     # ---------------- Start Misuration ----------------
-    start_time = time.time()
+    start_time = time.perf_counter()
 
     (spark.read.schema(schema)
      .parquet(HDFS_PARQUET_PATH)
@@ -102,13 +102,18 @@ def main(workers_number: int):
     df_carbon_asc = spark.sql(carbon_asc_sql)
     df_cfe_desc = spark.sql(cfe_desc_sql)
     df_cfe_asc = spark.sql(cfe_asc_sql)
+	
+    df_carbon_desc.cache()
+    df_carbon_asc.cache()
+    df_cfe_desc.cache()
+    df_cfe_asc.cache()
 
     df_carbon_desc.count()
     df_carbon_asc.count()
     df_cfe_desc.count()
     df_cfe_asc.count()
 
-    final_time = time.time() - start_time
+    final_time = time.perf_counter() - start_time
     # ---------------- End Misuration ----------------
 
     df_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "carbonDirectDesc")
