@@ -70,7 +70,6 @@ def main(workers_number: int):
         lambda a, b: (a[0] + b[0], a[1] + b[1], a[2] + b[2])
     )
 	
-    time2 = time.perf_counter()	
     country_stats = (
         hourly_agg
         .map(lambda kv: (kv[0][0], (kv[1][0] / kv[1][2], kv[1][1] / kv[1][2])))
@@ -80,8 +79,7 @@ def main(workers_number: int):
             calculate_stats([v[1] for v in values])  # Stats per CFE
         ))
     )
-    timefin = time.perf_counter() - time2
-    print("Tempo perc: " + str(timefin)) 
+
     # Trasforma in formato finale
     results = country_stats.flatMap(lambda rec: [
         (rec[0], 'carbon-intensity', *rec[1][0]),  # carbon stats

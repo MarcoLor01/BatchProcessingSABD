@@ -2,7 +2,7 @@ import logging
 import sys
 import time
 from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
-from src.utilities.config import HDFS_PARQUET_PATH, QUERY_3_SQL, HDFS_BASE_RESULT_PATH_Q3_SQL
+from src.utilities.config import HDFS_PARQUET_PATH, QUERY_3_SQL_PARQUET, HDFS_CSV_PATH, QUERY_3_SQL_CSV, HDFS_BASE_RESULT_PATH_Q3_SQL
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from pyspark.sql import functions as F
 
@@ -26,15 +26,32 @@ schema = StructType([
 # esimo percentile e massimo del valor medio di "Carbon intensity gCO2eq/kWh (direct)" e "Carbonfree
 # energy percentage (CFE%)".
 
-def main(workers_number: int):
+def main(data_format, workers_number):
     spark = create_spark_session("Q3 SQL Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
     start_read = time.perf_counter()
-    (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
-                                                                     F.to_timestamp("event_time",
-                                                                                    "yyyy-MM-dd HH:mm:ss")).withColumn(
-        "record_hour", F.hour("event_time")).createOrReplaceTempView("energy_data"))
+
+    if data_format.lower() == "parquet":
+    	df = (
+        spark.read.schema(schema)
+        .parquet(HDFS_PARQUET_PATH)
+        .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
+        .withColumn("record_hour", F.hour("event_time"))
+    )
+
+    else:
+    	df = (
+        spark.read.schema(schema)
+        .option("header", "true")
+        .option("sep", ",")
+        .option("recursiveFileLookup", "true")
+        .csv(HDFS_CSV_PATH)
+        .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
+        .withColumn("record_hour", F.hour("event_time"))
+    )
+        
+    df.createOrReplaceTempView("energy_data")
 
     # Query SQL
     sql = """
@@ -83,18 +100,27 @@ def main(workers_number: int):
     final_time = time.perf_counter() - start_read
     # ---------------- End Misuration ----------------
 
-    (result
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3_SQL))
-
-    save_execution_time(QUERY_3_SQL, workers_number, final_time)
+    if data_format.lower() == "parquet":
+        (result
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q3_SQL + "/parquet/"))
+        save_execution_time(QUERY_3_SQL_PARQUET, workers_number, final_time)
+    else:
+        (result
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q3_SQL + "/csv/"))
+        save_execution_time(QUERY_3_SQL_CSV, workers_number, final_time)
 
     spark.stop()
 
 
 if __name__ == "__main__":
-    workers_number = int(sys.argv[1])
-    main(workers_number)
+    workers_number = int(sys.argv[2])
+    data_format = sys.argv[1]
+    main(data_format, workers_number)

@@ -2,7 +2,7 @@ import sys
 import time
 import logging
 from pyspark.sql import SparkSession
-from src.utilities.config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2_SQL, QUERY_2_SQL
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_CSV_PATH_ITA, HDFS_BASE_RESULT_PATH_Q2_SQL, QUERY_2_SQL_PARQUET, QUERY_2_SQL_CSV
 from src.utilities.commonQueryFunction import save_execution_time
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from pyspark.sql import functions as F
@@ -22,19 +22,28 @@ schema = StructType([
 ])
 
 
-def main(workers_number: int):
+def main(data_format, workers_number):
     spark = SparkSession.builder.appName("Q2 Energy Stats SQL").getOrCreate()
 
     # ---------------- Start Misuration ----------------
     start_time = time.perf_counter()
 
-    (spark.read.schema(schema)
-     .parquet(HDFS_PARQUET_PATH)
-     .filter("Country = 'IT'")
-     .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
-     .withColumn("record_year", F.year("event_time"))
-     .withColumn("record_month", F.month("event_time"))
-     .createOrReplaceTempView("energy_it"))
+    if data_format.lower() == "parquet":
+        df = (
+            spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'IT').withColumn("event_time",
+    		F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
+    		.withColumn("record_month", F.month("event_time")))
+    else:
+        df = (
+            spark.read.schema(schema)
+            .option("header", "true")
+            .option("sep", ",")
+            .csv(HDFS_CSV_PATH_ITA).withColumn("event_time",
+    		F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
+    		.withColumn("record_month", F.month("event_time")))
+             
+    df.createOrReplaceTempView("energy_it")	
+    
 
     sql = """
     WITH agg AS (
@@ -116,15 +125,27 @@ def main(workers_number: int):
     final_time = time.perf_counter() - start_time
     # ---------------- End Misuration ----------------
 
-    df_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "carbonDirectDesc")
-    df_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "carbonDirectAsc")
-    df_cfe_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "cfeDesc")
-    df_cfe_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "cfeAsc")
+    if data_format.lower() == "parquet":
+        df_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "/parquet/" + "carbonDirectDesc")
+        df_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "/parquet/" + "carbonDirectAsc")
+        df_cfe_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "/parquet/" + "cfeDesc")
+        df_cfe_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(HDFS_BASE_RESULT_PATH_Q2_SQL + "/parquet/" + "cfeAsc")
+        save_execution_time(QUERY_2_SQL_PARQUET, workers_number, final_time)
+    else:
+        df_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2_SQL + "/csv/" + "carbonDirectDesc")
+        df_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2_SQL + "/csv/" + "carbonDirectAsc")
+        df_cfe_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2_SQL + "/csv/" + "cfeDesc")
+        df_cfe_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2_SQL + "/csv/" + "cfeAsc")
+        save_execution_time(QUERY_2_SQL_CSV, workers_number, final_time)
 
-    save_execution_time(QUERY_2_SQL, workers_number, final_time)
     spark.stop()
 
 
 if __name__ == "__main__":
-    workers_number = int(sys.argv[1])
-    main(workers_number)
+    workers_number = int(sys.argv[2])
+    data_format = sys.argv[1]
+    main(data_format, workers_number)

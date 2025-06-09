@@ -5,10 +5,10 @@ NIFI_PORT=8080
 HDFS_INTERVAL=10
 NIFI_INTERVAL=60
 NIFI_API_BASE_URL="http://${NIFI_HOST}:${NIFI_PORT}/nifi-api"
-NUM_RUNS=5
+NUM_RUNS=1
 TARGET="./benchmark"
-TO_REDIS="f93b6d9b-0196-1000-b473-35012106a485"
-
+TO_REDIS="374c5e9d-0197-1000-a538-bc3fa9191f9f"
+TO_HDFS="374cbdb9-0197-1000-e279-a9653bdd6b13"
 install_package() {
   PACKAGE=$1
   if ! command -v "${PACKAGE}" &> /dev/null; then
@@ -47,27 +47,22 @@ wait_for_nifi() {
   echo "NiFi è pronto."
 }
 
-start_root_pg() {
-  echo "Avvio del Process Group Root..."
-  ROOT_PG_JSON=$(curl -sf "${NIFI_API_BASE_URL}/flow/process-groups/root")
-  ROOT_PG_ID=$(echo "$ROOT_PG_JSON" | jq -r '.processGroupFlow.id')
+start_to_hdfs_pg() {
+  echo "=== Avvio del Process Group TO_HDFS ==="
   curl -X PUT -H "Content-Type: application/json" \
-       -d "{\"id\":\"${ROOT_PG_ID}\",\"state\":\"RUNNING\"}" \
-       "${NIFI_API_BASE_URL}/flow/process-groups/${ROOT_PG_ID}"
-  echo "Process Group Root avviato (ID: $ROOT_PG_ID)."
+       -d "{\"id\":\"${TO_HDFS}\",\"state\":\"RUNNING\"}" \
+       "${NIFI_API_BASE_URL}/flow/process-groups/${TO_HDFS}" \
+       && echo "• Process Group TO_HDFS avviato (ID: ${TO_HDFS})."
 }
 
-stop_root_pg() {
-  echo "Arresto del Process Group Root..."
-  sleep 10
-  # Recupera il JSON del flow per ottenere l’ID del Process Group Root
-  ROOT_PG_JSON=$(curl -sf "${NIFI_API_BASE_URL}/flow/process-groups/root")
-  ROOT_PG_ID=$(echo "$ROOT_PG_JSON" | jq -r '.processGroupFlow.id')
-  # Invia la richiesta per impostare lo stato su STOPPED
+stop_to_hdfs_pg() {
+  echo "=== Arresto del Process Group TO_HDFS ==="
+  
+  sleep 5
   curl -X PUT -H "Content-Type: application/json" \
-       -d "{\"id\":\"${ROOT_PG_ID}\",\"state\":\"STOPPED\"}" \
-       "${NIFI_API_BASE_URL}/flow/process-groups/${ROOT_PG_ID}"
-  echo "Process Group Root fermato (ID: $ROOT_PG_ID)."
+       -d "{\"id\":\"${TO_HDFS}\",\"state\":\"STOPPED\"}" \
+       "${NIFI_API_BASE_URL}/flow/process-groups/${TO_HDFS}" \
+       && echo "• Process Group TO_HDFS fermato (ID: ${TO_HDFS})."
 }
 
 start_to_redis_pg() {
@@ -80,7 +75,7 @@ start_to_redis_pg() {
 
 stop_to_redis_pg() {
   echo "Arresto del Process Group TO_REDIS (ID: $TO_REDIS)..."
-  sleep 10
+  sleep 15
   curl -X PUT -H "Content-Type: application/json" \
        -d "{\"id\":\"${TO_REDIS}\",\"state\":\"STOPPED\"}" \
        "${NIFI_API_BASE_URL}/flow/process-groups/${TO_REDIS}"
@@ -95,7 +90,7 @@ wait_for_hdfs_data() {
 
   # Primo controllo: almeno 2 file in /electricity_data_parquet
   while true; do
-    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /electricity_data_parquet 2>/dev/null | grep -v '^Found' | wc -l)
+    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /user/root/electricity_data_parquet 2>/dev/null | grep -v '^Found' | wc -l)
     if [ "$FILE_COUNT" -ge 2 ]; then
       echo "Trovati 2 file (o più) in /electricity_data_parquet."
       break
@@ -116,7 +111,7 @@ wait_for_hdfs_data() {
 
   # Secondo controllo: almeno 2 file in /electricity_data_csv
   while true; do
-    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /electricity_data_csv 2>/dev/null | grep -v '^Found' | wc -l)
+    FILE_COUNT=$(docker exec namenode hdfs dfs -ls /user/root/electricity_data_csv 2>/dev/null | grep -v '^Found' | wc -l)
     if [ "$FILE_COUNT" -ge 2 ]; then
       echo "Trovati 2 file (o più) in /electricity_data_csv."
       break
@@ -135,6 +130,7 @@ wait_for_hdfs_data() {
   echo "Entrambi i controlli superati: presenti almeno 2 file in /electricity_data_parquet e 2 file in /electricity_data_csv. Continuo..."
 }
 
+###################### INIZIO ESECUZIONE #########################
 
 install_package jq
 
@@ -142,7 +138,7 @@ echo "Svuoto cartella risultati benchmark $TARGET …"
   find "$TARGET" -mindepth 1 -exec rm -rf {} +
   echo "Fatto."
 
-for WORKERS in 1; do
+  for WORKERS in $(seq 1 1); do
   echo "=== ESECUZIONE CON ${WORKERS} WORKER(S) ==="
 
   echo "1. Avvio dei servizi Docker Compose con ${WORKERS} worker..."
@@ -158,36 +154,37 @@ for WORKERS in 1; do
   echo "2. Attesa che NiFi sia disponibile..."
   wait_for_nifi
 
-  docker exec namenode hdfs dfs -rm -r /electricity_data_parquet/*
-  docker exec namenode hdfs dfs -rm -r /electricity_data_csv/*
+  docker exec namenode hdfs dfs -rm -r /user/root/electricity_data_parquet/*
+  docker exec namenode hdfs dfs -rm -r /user/root/electricity_data_csv/*
 
-  echo "3. Avvio del flusso Root in NiFi..."
-  start_root_pg
+  echo "3. Avvio del flusso HDFS in NiFi..."
+  start_to_hdfs_pg
 
   echo "4. Attesa che i dati siano presenti in HDFS..."
   wait_for_hdfs_data
 
   echo "3. Stop del flusso Root in NiFi..."
-  stop_root_pg &
+  stop_to_hdfs_pg &
 
   for run in $(seq 1 $NUM_RUNS); do
     echo "=== Run #$run con ${WORKERS} worker(s) ==="
 
     echo "Svuoto directory risultati..."
-    docker exec namenode hdfs dfs -rm -r /result/query1/*
-    docker exec namenode hdfs dfs -rm -r /result/query2/*
-    docker exec namenode hdfs dfs -rm -r /result/query3/*
-    docker exec namenode hdfs dfs -rm -r /result/query1rdd/*
-    docker exec namenode hdfs dfs -rm -r /result/query2rdd/*
-    docker exec namenode hdfs dfs -rm -r /result/query3rdd/*
-    docker exec namenode hdfs dfs -rm -r /result/query1SQL/*
-    docker exec namenode hdfs dfs -rm -r /result/query2SQL/*
-    docker exec namenode hdfs dfs -rm -r /result/query3SQL/*
-    docker exec namenode hdfs dfs -rm -r /result/query3exact/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query1/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query2/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query3/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query1rdd/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query2rdd/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query3rdd/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query1sql/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query2sql/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query3sql/*
+    docker exec namenode hdfs dfs -rm -r /user/root/result/query3exact/*
     echo "Completato, inizio esecuzioni query"
 
     echo "Esecuzione query2SQL.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query1RDD.py..."
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1RDD.py $WORKERS || exit 1
@@ -199,29 +196,37 @@ for WORKERS in 1; do
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3RDD.py $WORKERS || exit 1
 
     echo "Esecuzione query1.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query1SQL.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query2.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query3.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query3exact.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query3SQL.py..."
-    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py $WORKERS || exit 1
-
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py "parquet" $WORKERS || exit 1
+    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py "csv" $WORKERS || exit 1
+  done
+done
     echo "Esporto risultati da HDFS a Redis tramite NiFi..."
+
+    #docker exec redis redis-cli FLUSHALL
     start_to_redis_pg
 
     echo "Completato, stop del processo NiFi..."
     stop_to_redis_pg
-  done
-done
-docker-compose down
+    #docker-compose down
+
 echo "Script completato"

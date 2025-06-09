@@ -3,7 +3,7 @@ import sys
 import time
 import logging
 from pyspark.sql import functions as F
-from src.utilities.config import HDFS_PARQUET_PATH, HDFS_BASE_RESULT_PATH_Q2, QUERY_2
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_CSV_PATH_ITA, HDFS_BASE_RESULT_PATH_Q2, QUERY_2_PARQUET, QUERY_2_CSV
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
 
@@ -29,14 +29,26 @@ schema = StructType([
 # (direct)” decrescente, crescente e “Carbon-free energy percentage (CFE%)” decrescente, crescente.
 # In totale sono attesi 20 valori.
 
-def main(workers_number: int):
+def main(data_format, workers_number):
     spark = create_spark_session("Q2 Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
     start_time = time.perf_counter()
-    df = (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'IT').withColumn("event_time",
-    F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
-    .withColumn("record_month", F.month("event_time")))
+
+    if data_format.lower() == "parquet":
+
+        df = (spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).filter(F.col("Country") == 'IT').withColumn("event_time",
+    		F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
+    		.withColumn("record_month", F.month("event_time")))
+    else:
+        df = (
+            spark.read.schema(schema)
+            .option("header", "true")
+            .option("sep", ",")
+            .csv(HDFS_CSV_PATH_ITA).withColumn("event_time",
+    		F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_year", F.year("event_time"))
+    		.withColumn("record_month", F.month("event_time")))
+   
 
     result = (df.groupBy("record_year", "record_month").agg(
         F.avg("CarbonDirect").alias("avg_carbon_intensity"),
@@ -66,33 +78,52 @@ def main(workers_number: int):
     # ---------------- End Misuration ----------------
 
     # Scrittura CSV 1 - Classifiche
+    if data_format.lower() == "parquet":
+        result_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/parquet/" + "result_carbon_desc")
+        result_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/parquet/" + "result_carbon_asc")
+        cfe_percentage_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/parquet/" + "cfe_percentage_desc")
+        cfe_percentage_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/parquet/" + "cfe_percentage_asc")
+        save_execution_time(QUERY_2_PARQUET, workers_number, final_time)
 
-    result_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
-        HDFS_BASE_RESULT_PATH_Q2 + "result_carbon_desc")
-    result_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
-        HDFS_BASE_RESULT_PATH_Q2 + "result_carbon_asc")
-    cfe_percentage_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
-        HDFS_BASE_RESULT_PATH_Q2 + "cfe_percentage_desc")
-    cfe_percentage_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
-        HDFS_BASE_RESULT_PATH_Q2 + "cfe_percentage_asc")
+        result_timeseries = result.orderBy("month_timestamp")
 
-    # === CSV 2: SERIE TEMPORALE COMPLETA (per grafico) ===
+        # Scrittura CSV 2 - Serie temporale
+        (result_timeseries
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q2 + "/csv/" + "timeseries"))
 
-    result_timeseries = result.orderBy("month_timestamp")
+    else:
+        result_carbon_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/csv/" + "result_carbon_desc")
+        result_carbon_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/csv/" + "result_carbon_asc")
+        cfe_percentage_desc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/csv/" + "cfe_percentage_desc")
+        cfe_percentage_asc.coalesce(1).write.mode("overwrite").option("header", True).csv(
+            HDFS_BASE_RESULT_PATH_Q2 + "/csv/" + "cfe_percentage_asc")
+        save_execution_time(QUERY_2_CSV, workers_number, final_time)
 
-    # Scrittura CSV 2 - Serie temporale
-    (result_timeseries
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q2 + "timeseries"))
+        result_timeseries = result.orderBy("month_timestamp")
 
-    save_execution_time(QUERY_2, workers_number, final_time)
+        # Scrittura CSV 2 - Serie temporale
+        (result_timeseries
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q2 + "/csv/" + "timeseries"))
 
     spark.stop()
 
 
 if __name__ == "__main__":
-    workers_number = int(sys.argv[1])
-    main(workers_number)
+    workers_number = int(sys.argv[2])
+    data_format = sys.argv[1]
+    main(data_format, workers_number)

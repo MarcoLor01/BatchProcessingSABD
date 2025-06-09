@@ -3,7 +3,7 @@ import sys
 import time
 from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
 from pyspark.sql import functions as F
-from src.utilities.config import HDFS_PARQUET_PATH, QUERY_3_EXACT, HDFS_BASE_RESULT_PATH_Q3_EXACT
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_CSV_PATH, QUERY_3_EXACT_PARQUET, QUERY_3_EXACT_CSV, HDFS_BASE_RESULT_PATH_Q3_EXACT
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 
 # Configura il logger
@@ -28,14 +28,29 @@ schema = StructType([
 # esimo percentile e massimo del valor medio di “Carbon intensity gCO2eq/kWh (direct)” e “Carbonfree
 # energy percentage (CFE%)”.
 
-def main(workers_number: int):
+def main(data_format, workers_number):
     spark = create_spark_session("Q3 Exact Energy Stats", "DF", workers_number)
 
     # ---------------- Start Misuration ----------------
     start_read = time.perf_counter()
 
-    df = spark.read.schema(schema).parquet(HDFS_PARQUET_PATH).withColumn("event_time",
-    F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss")).withColumn("record_hour", F.hour("event_time"))
+    if data_format.lower() == "parquet":
+        df = (
+            spark.read.schema(schema)
+            .parquet(HDFS_PARQUET_PATH)
+            .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
+            .withColumn("record_hour", F.hour("event_time"))
+        )
+    else:
+        df = (
+            spark.read.schema(schema)
+            .option("header", "true")
+            .option("sep", ",")
+            .option("recursiveFileLookup", "true")
+            .csv(HDFS_CSV_PATH)
+            .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
+            .withColumn("record_hour", F.hour("event_time"))
+        )
 
     # 2. Calcola la media oraria per ciascun Paese
     intermediate_result = df.groupBy("Country", "record_hour").agg(
@@ -81,28 +96,45 @@ def main(workers_number: int):
     total_time = time.perf_counter() - start_read
     # ---------------- End Misuration ----------------
 
-    # === CSV 1: STATISTICHE DESCRITTIVE ===
-    (final_result
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "stats"))
+    if data_format.lower() == "parquet":
+        (final_result
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "/parquet/" + "stats"))
 
-    # === CSV 2: ANDAMENTO ORARIO (per grafici Grafana) ===
-    (intermediate_result
-     .orderBy("Country", "record_hour")
-     .coalesce(1)
-     .write
-     .mode("overwrite")
-     .option("header", True)
-     .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "hourly"))
+        # === CSV 2: ANDAMENTO ORARIO (per grafici Grafana) ===
+        (intermediate_result
+         .orderBy("Country", "record_hour")
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "/parquet/" + "hourly"))
+        save_execution_time(QUERY_3_EXACT_PARQUET, workers_number, total_time)
+    else:
+        (final_result
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "/csv/" + "stats"))
 
-    save_execution_time(QUERY_3_EXACT, workers_number, total_time)
+        # === CSV 2: ANDAMENTO ORARIO (per grafici Grafana) ===
+        (intermediate_result
+         .orderBy("Country", "record_hour")
+         .coalesce(1)
+         .write
+         .mode("overwrite")
+         .option("header", True)
+         .csv(HDFS_BASE_RESULT_PATH_Q3_EXACT + "/csv/" + "hourly"))
+        save_execution_time(QUERY_3_EXACT_CSV, workers_number, total_time)
 
     spark.stop()
 
 
 if __name__ == "__main__":
-    workers_number = int(sys.argv[1])
-    main(workers_number)
+    workers_number = int(sys.argv[2])
+    data_format = sys.argv[1]
+    main(data_format, workers_number)
