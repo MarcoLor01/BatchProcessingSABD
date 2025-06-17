@@ -5,10 +5,11 @@ NIFI_PORT=8080
 HDFS_INTERVAL=10
 NIFI_INTERVAL=60
 NIFI_API_BASE_URL="http://${NIFI_HOST}:${NIFI_PORT}/nifi-api"
-NUM_RUNS=1
+NUM_RUNS=5
 TARGET="./benchmark"
 TO_REDIS="374c5e9d-0197-1000-a538-bc3fa9191f9f"
 TO_HDFS="374cbdb9-0197-1000-e279-a9653bdd6b13"
+
 install_package() {
   PACKAGE=$1
   if ! command -v "${PACKAGE}" &> /dev/null; then
@@ -138,13 +139,13 @@ echo "Svuoto cartella risultati benchmark $TARGET …"
   find "$TARGET" -mindepth 1 -exec rm -rf {} +
   echo "Fatto."
 
-  for WORKERS in $(seq 1 1); do
+  for WORKERS in $(seq 1 4); do
   echo "=== ESECUZIONE CON ${WORKERS} WORKER(S) ==="
 
   echo "1. Avvio dei servizi Docker Compose con ${WORKERS} worker..."
 
-  #docker-compose down
-  #docker-compose up --build -d --scale spark-worker=$WORKERS
+  docker-compose down
+  docker-compose up --build -d --scale spark-worker=$WORKERS
 
   if [ $? -ne 0 ]; then
     echo "Errore durante l'avvio di Docker Compose."
@@ -183,8 +184,8 @@ echo "Svuoto cartella risultati benchmark $TARGET …"
     echo "Completato, inizio esecuzioni query"
 
     echo "Esecuzione query2SQL.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2SQL.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query1RDD.py..."
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1RDD.py $WORKERS || exit 1
@@ -196,28 +197,28 @@ echo "Svuoto cartella risultati benchmark $TARGET …"
     docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3RDD.py $WORKERS || exit 1
 
     echo "Esecuzione query1.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query1SQL.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query1SQL.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query2.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query2.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query3.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query3exact.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3exact.py "csv" $WORKERS || exit 1
 
     echo "Esecuzione query3SQL.py..."
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py "parquet" $WORKERS || exit 1
-    #docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py "csv" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py "parquet" $WORKERS || exit 1
+    docker exec da-spark-master spark-submit --deploy-mode client /opt/spark/src/queries/query3SQL.py "csv" $WORKERS || exit 1
   done
 done
     echo "Esporto risultati da HDFS a Redis tramite NiFi..."

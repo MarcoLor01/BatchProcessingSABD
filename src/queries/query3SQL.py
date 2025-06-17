@@ -33,15 +33,14 @@ def main(data_format, workers_number):
     start_read = time.perf_counter()
 
     if data_format.lower() == "parquet":
-    	df = (
+        df = (
         spark.read.schema(schema)
         .parquet(HDFS_PARQUET_PATH)
         .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
         .withColumn("record_hour", F.hour("event_time"))
     )
-
     else:
-    	df = (
+        df = (
         spark.read.schema(schema)
         .option("header", "true")
         .option("sep", ",")
@@ -50,7 +49,7 @@ def main(data_format, workers_number):
         .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
         .withColumn("record_hour", F.hour("event_time"))
     )
-        
+
     df.createOrReplaceTempView("energy_data")
 
     # Query SQL
@@ -62,7 +61,6 @@ def main(data_format, workers_number):
         AVG(CarbonDirect) AS avg_hour_carbon_intensity,
         AVG(CFEpercent)   AS avg_hour_cfe_percentage
       FROM energy_data
-      WHERE Country IN ('IT','SE')
       GROUP BY Country, record_hour
     ),
     stats_carbon AS (
@@ -108,6 +106,7 @@ def main(data_format, workers_number):
          .option("header", True)
          .csv(HDFS_BASE_RESULT_PATH_Q3_SQL + "/parquet/"))
         save_execution_time(QUERY_3_SQL_PARQUET, workers_number, final_time)
+
     else:
         (result
          .coalesce(1)

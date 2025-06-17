@@ -3,7 +3,8 @@ import sys
 import time
 import logging
 from pyspark.sql import functions as F
-from src.utilities.config import HDFS_PARQUET_PATH, HDFS_CSV_PATH, QUERY_3_PARQUET, QUERY_3_CSV, HDFS_BASE_RESULT_PATH_Q3
+from src.utilities.config import HDFS_PARQUET_PATH, HDFS_CSV_PATH, QUERY_3_PARQUET, QUERY_3_CSV, \
+    HDFS_BASE_RESULT_PATH_Q3
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType
 from src.utilities.commonQueryFunction import create_spark_session, save_execution_time
 
@@ -36,30 +37,28 @@ def main(data_format, workers_number):
     start_time = time.perf_counter()
 
     if data_format.lower() == "parquet":
-    	df = (
-        spark.read.schema(schema)
-        .parquet(HDFS_PARQUET_PATH)
-        .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
-        .withColumn("record_hour", F.hour("event_time"))
-    )
+        df = (
+            spark.read.schema(schema)
+            .parquet(HDFS_PARQUET_PATH)
+            .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
+            .withColumn("record_hour", F.hour("event_time"))
+        )
     else:
-    	df = (
-        spark.read.schema(schema)
-        .option("header", "true")
-        .option("sep", ",")
-        .option("recursiveFileLookup", "true")
-        .csv(HDFS_CSV_PATH)
-        .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
-        .withColumn("record_hour", F.hour("event_time"))
-    )
-
-
+        df = (
+            spark.read.schema(schema)
+            .option("header", "true")
+            .option("sep", ",")
+            .option("recursiveFileLookup", "true")
+            .csv(HDFS_CSV_PATH)
+            .withColumn("event_time", F.to_timestamp("event_time", "yyyy-MM-dd HH:mm:ss"))
+            .withColumn("record_hour", F.hour("event_time"))
+        )
 
     intermediate_result = df.groupBy("Country", "record_hour").agg(
         F.avg("CarbonDirect").alias("avg_hour_carbon_intensity"),
         F.avg("CFEpercent").alias("avg_hour_cfe_percentage")
     )
-    
+
     carbon_stats = intermediate_result.groupBy("Country").agg(
         F.min("avg_hour_carbon_intensity").alias("carbon_min"),
         F.expr("percentile_approx(avg_hour_carbon_intensity, array(0.25, 0.5, 0.75), 100)").alias("carbon_quartiles"),
@@ -92,7 +91,7 @@ def main(data_format, workers_number):
 
     # Unione dei risultati finali
     final_result = carbon_result.unionByName(cfe_result)
-    
+
     final_result.cache()
     final_result.count()
     total_time = time.perf_counter() - start_time
@@ -114,8 +113,6 @@ def main(data_format, workers_number):
          .option("header", True)
          .csv(HDFS_BASE_RESULT_PATH_Q3 + "/csv/"))
         save_execution_time(QUERY_3_CSV, workers_number, total_time)
-
-
 
     spark.stop()
 
